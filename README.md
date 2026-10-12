@@ -12,6 +12,8 @@ Windows / macOS 常驻待办小窗口，展示飞书当前用户任务，完成�
 
 内部试用安装包通过 [GitHub Releases](https://github.com/orulink-Ciel/Feishu-Desktop-Todo/releases) 提供：Windows x64 安装程序、Apple 芯片 Mac 和 Intel Mac 的 DMG。首次设置与分发边界见 [打包与试用发布](docs/打包与试用发布.md)。安装包附带飞书 CLI 原生程序，不需要 Node.js、Rust 或额外安装 CLI；新机器仍需配置飞书应用并完成用户授权。
 
+本公司 Windows 同事使用 Release 中带 `internal-windows-x64` 的安装包，它包含值日来源配置；三个通用包不预设公司值日来源。所有安装包均不包含飞书登录凭证，读取值日表需要相应组织权限。
+
 - 今天：今天到期、此前到期和本机固定到今天的任务。
 - 全部：查看其他未完成任务；点击图钉固定到今天，不改飞书日期。
 - 点击标题：优先直接唤起飞书客户端任务详情；系统无法唤起时回退网页。任务行右侧来源图标可打开文档或业务来源。
