@@ -1,0 +1,27 @@
+[package]
+name = "feishu-desktop-todo"
+version = "0.1.0"
+description = "Personal Feishu desktop task widget"
+edition = "2021"
+
+[lib]
+name = "feishu_desktop_todo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.38", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+url = "2"
+open = "5"
+tauri-plugin-window-state = "2"
+
+[dev-dependencies]
+tempfile = "3"

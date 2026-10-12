@@ -1,0 +1,15 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.connectOverCDP('http://127.0.0.1:9223');
+const page = browser.contexts().flatMap(c => c.pages()).find(p => p.url().startsWith('http://127.0.0.1:1420'));
+if (!page) throw new Error('Native app page not found');
+await page.getByRole('heading', { name: '今日待办', exact: true }).waitFor();
+await page.getByText('田贵梯', {exact:true}).waitFor();
+if (await page.locator('.preview-banner').count()) throw new Error('Native app has demo data');
+await page.screenshot({path: 'artifacts/desktop-minimal-today.png'});
+await page.getByRole('button', {name:'设置',exact:true}).click();
+await page.locator('.settings-panel').waitFor();
+await page.screenshot({path: 'artifacts/desktop-minimal-settings.png'});
+await page.getByRole('button', {name:'设置',exact:true}).click();
+await page.getByRole('button', {name:'退出',exact:true}).click();
+await browser.close();
+console.log('Native window visual check passed; no task writes performed.');

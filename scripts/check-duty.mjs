@@ -1,0 +1,25 @@
+import { chromium } from '@playwright/test';
+import { writeFile } from 'node:fs/promises';
+const browser = await chromium.connectOverCDP('http://127.0.0.1:9223');
+const page = browser.contexts().flatMap(c => c.pages()).find(p => p.url().includes('127.0.0.1:1420'));
+if (!page) throw new Error('Native desktop page not found');
+const errors = [];
+page.on('pageerror', e => errors.push(e.message));
+await page.getByRole('heading', { name: '今日待办' }).waitFor();
+await page.getByText('值日未配置', { exact: true }).waitFor();
+const result = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke('get_duty', { refresh: true }));
+if (result.error || result.cached || result.payload.roster.length || result.payload.exceptions.length || result.payload.rules.length !== 1 || result.payload.rules[0].enabled !== false || result.payload.rules[0].startDate !== null) throw new Error('Unexpected real duty data: ' + JSON.stringify(result));
+await page.getByRole('button', { name: '值日制度', exact: true }).waitFor();
+await page.getByRole('button', { name: '名单与规则', exact: true }).waitFor();
+const before = result.lastSyncedAt;
+await page.getByRole('button', { name: '刷新值日', exact: true }).click();
+await page.waitForFunction(async before => {
+  const next = await window.__TAURI_INTERNALS__.invoke('get_duty', { refresh: false });
+  return next.lastSyncedAt > before;
+}, before, { polling: 750, timeout: 30000 });
+await page.getByRole('button', { name: '刷新值日', exact: true }).waitFor({ state: 'visible' });
+await page.screenshot({ path: 'artifacts/desktop-duty.png' });
+if (errors.length) throw new Error(JSON.stringify(errors));
+await writeFile('artifacts/duty-native-check.json', JSON.stringify({ passed: true, checks: ['real_native_bridge','real_base_read','roster_left_empty','rule_disabled','dedicated_refresh','document_and_settings_links','no_task_writes'], lastSyncedAt: result.lastSyncedAt, pageErrors: errors }, null, 2));
+await browser.close();
+console.log('Native duty checks passed; live roster remains empty and rule disabled');

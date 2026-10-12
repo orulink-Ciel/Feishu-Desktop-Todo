@@ -1,0 +1,253 @@
+import { describe, expect, it } from "vitest";
+import { dayNumber, defaultWorkday, dutyForDate } from "./duty";
+import type { DutyPayload } from "./types";
+const person = (id: string, name = id) => ({ id: "ou_" + id, name });
+const config = (): DutyPayload => ({
+  roster: ["A", "B", "C"].map((name, i) => ({
+    person: [person(name)],
+    order: i + 1,
+    included: true,
+  })),
+  rules: [
+    {
+      enabled: true,
+      startDate: "2026-10-10T00:00:00.000+08:00",
+      dailyCount: 1,
+      singleWeekAnchor: "2026-10-05T00:00:00.000+08:00",
+    },
+  ],
+  exceptions: [],
+  leave: [],
+  calendar: [{ date: "2026-01-01", kind: "年度已核验" }],
+});
+const names = (p: DutyPayload, date: string) =>
+  dutyForDate(p, date).people.map((p) => p.name);
+describe("company duty rotation", () => {
+  it("automatically skips official holidays and includes official makeup days", () => {
+    const p = config();
+    p.rules[0].startDate = "2026-10-05";
+    for (let d = 1; d <= 7; d++)
+      p.calendar.push({ date: `2026-10-0${d}`, kind: "休息", note: "国庆节" });
+    expect(dutyForDate(p, "2026-10-05").state).toBe("rest");
+    expect(names(p, "2026-10-08")).toEqual(["A"]);
+    expect(names(p, "2026-10-12")).toEqual(["A"]);
+    p.rules[0].startDate = "2026-09-18";
+    p.calendar.push({ date: "2026-09-20", kind: "补班" });
+    expect(names(p, "2026-09-20")).toEqual(["B"]);
+    p.exceptions = [
+      { date: "2026-10-05", kind: "补班", people: [person("C")] },
+    ];
+    expect(names(p, "2026-10-05")).toEqual(["C"]);
+  });
+  it("fails visibly when a required calendar year has not been verified", () => {
+    expect(dutyForDate(config(), "2027-01-01").message).toContain(
+      "2027 年节假日日历尚未核验",
+    );
+    const p = config();
+    p.calendar = [];
+    expect(dutyForDate(p, "2026-10-12").state).toBe("invalid");
+    p.calendar = [
+      { date: "2026-01-01", kind: "年度已核验" },
+      { date: "2026-01-02", kind: "年度已核验" },
+    ];
+    expect(dutyForDate(p, "2026-10-12").state).toBe("invalid");
+  });
+  it("requires manual cover during inclusive leave and keeps later turns intact", () => {
+    const p = config();
+    p.rules[0].leavePolicy = "手动代班";
+    p.leave = [
+      { person: [person("B")], startDate: "2026-10-12", endDate: "2026-10-12" },
+    ];
+    expect(dutyForDate(p, "2026-10-12").state).toBe("needsReplacement");
+    expect(names(p, "2026-10-13")).toEqual(["C"]);
+    p.exceptions = [
+      { date: "2026-10-12", kind: "换人", people: [person("C")] },
+    ];
+    expect(names(p, "2026-10-12")).toEqual(["C"]);
+    expect(names(p, "2026-10-13")).toEqual(["C"]);
+    p.exceptions[0].people = [person("B")];
+    expect(dutyForDate(p, "2026-10-12").state).toBe("needsReplacement");
+  });
+  it("supports selectable leave policies without selecting the same person twice", () => {
+    const p = config();
+    p.leave = [
+      { person: [person("A")], startDate: "2026-10-10", endDate: "2026-10-10" },
+    ];
+    p.rules[0].leavePolicy = "顺延补值";
+    expect(names(p, "2026-10-10")).toEqual(["B"]);
+    expect(names(p, "2026-10-12")).toEqual(["A"]);
+    p.rules[0].leavePolicy = "跳过本次";
+    expect(names(p, "2026-10-10")).toEqual(["B"]);
+    expect(names(p, "2026-10-12")).toEqual(["C"]);
+    p.rules[0].dailyCount = 3;
+    expect(dutyForDate(p, "2026-10-10").state).toBe("needsReplacement");
+  });
+  it("ignores saved leave for a member who is no longer participating", () => {
+    const p = config();
+    p.roster[0].included = false;
+    p.leave = [
+      { person: [person("A")], startDate: "2026-10-10", endDate: "2026-10-20" },
+    ];
+    expect(names(p, "2026-10-10")).toEqual(["B"]);
+    expect(names(p, "2026-10-12")).toEqual(["C"]);
+  });
+  it("swaps two whole-day assignments using one record without changing later rotation", () => {
+    const p = config();
+    p.exceptions = [
+      { date: "2026-10-10", kind: "互换", swapDate: "2026-10-12" },
+    ];
+    expect(names(p, "2026-10-10")).toEqual(["B"]);
+    expect(names(p, "2026-10-12")).toEqual(["A"]);
+    expect(names(p, "2026-10-13")).toEqual(["C"]);
+    p.leave = [
+      { person: [person("A")], startDate: "2026-10-10", endDate: "2026-10-10" },
+    ];
+    expect(names(p, "2026-10-10")).toEqual(["B"]);
+    p.leave[0].endDate = "2026-10-12";
+    expect(dutyForDate(p, "2026-10-10").state).toBe("invalid");
+  });
+  it("rejects conflicting swaps, unavailable identities and malformed leave ranges", () => {
+    const cases: ((p: DutyPayload) => void)[] = [
+      (p) => {
+        p.exceptions = [
+          { date: "2026-10-10", kind: "互换", swapDate: "2026-10-11" },
+        ];
+      },
+      (p) => {
+        p.exceptions = [
+          { date: "2026-10-10", kind: "互换", swapDate: "2026-10-12" },
+          { date: "2026-10-12", kind: "换人", people: [person("C")] },
+        ];
+      },
+      (p) => {
+        p.leave = [
+          {
+            person: [person("departed")],
+            startDate: "2026-10-10",
+            endDate: "2026-10-12",
+          },
+        ];
+      },
+      (p) => {
+        p.leave = [
+          {
+            person: [person("A")],
+            startDate: "2026-10-13",
+            endDate: "2026-10-12",
+          },
+        ];
+      },
+      (p) => {
+        p.calendar.push(
+          { date: "2026-10-12", kind: "休息" },
+          { date: "2026-10-12", kind: "补班" },
+        );
+      },
+    ];
+    for (const change of cases) {
+      const p = config();
+      change(p);
+      expect(dutyForDate(p, "2026-10-12").state).toBe("invalid");
+    }
+  });
+  it("uses the fixed week anchor across months and years", () => {
+    const anchor = dayNumber("2026-10-05");
+    for (const [date, works] of [
+      ["2026-10-10", true],
+      ["2026-10-11", false],
+      ["2026-10-17", false],
+      ["2026-10-24", true],
+      ["2027-01-02", true],
+      ["2027-01-09", false],
+    ] as const)
+      expect(defaultWorkday(dayNumber(date), anchor)).toBe(works);
+  });
+  it("skips rest dates without consuming the sequence", () => {
+    const p = config();
+    expect(names(p, "2026-10-10")).toEqual(["A"]);
+    expect(dutyForDate(p, "2026-10-11").state).toBe("rest");
+    expect(names(p, "2026-10-12")).toEqual(["B"]);
+    expect(names(p, "2026-10-19")).toEqual(["A"]);
+  });
+  it("rotates multiple people and wraps without duplicate assignments", () => {
+    const p = config();
+    p.rules[0].dailyCount = 2;
+    expect(names(p, "2026-10-10")).toEqual(["A", "B"]);
+    expect(names(p, "2026-10-12")).toEqual(["C", "A"]);
+  });
+  it("respects rest, makeup days and replacements independently", () => {
+    const p = config();
+    p.exceptions = [
+      { date: "2026-10-12", kind: "休息", people: null },
+      { date: "2026-10-17", kind: "补班", people: [person("C")] },
+      { date: "2026-10-13", kind: "换人", people: [person("A")] },
+    ];
+    expect(dutyForDate(p, "2026-10-12").state).toBe("rest");
+    expect(names(p, "2026-10-13")).toEqual(["A"]);
+    expect(names(p, "2026-10-14")).toEqual(["C"]);
+    expect(names(p, "2026-10-17")).toEqual(["C"]);
+    expect(names(p, "2026-10-19")).toEqual(["A"]);
+  });
+  it("uses explicit order and excludes departing members", () => {
+    const p = config();
+    p.roster[0].included = false;
+    p.roster[2].order = 1;
+    expect(names(p, "2026-10-10")).toEqual(["C"]);
+  });
+  it("keeps same-name people separate by their Feishu identity", () => {
+    const p = config();
+    p.roster[0].person = [person("A", "同名")];
+    p.roster[1].person = [person("B", "同名")];
+    expect(dutyForDate(p, "2026-10-10").people[0].id).toBe("ou_A");
+    expect(dutyForDate(p, "2026-10-12").people[0].id).toBe("ou_B");
+  });
+  it("does not invent assignments before setup or the effective date", () => {
+    const p = config();
+    expect(dutyForDate(null, "2026-10-12").state).toBe("unconfigured");
+    p.rules[0].enabled = false;
+    expect(dutyForDate(p, "2026-10-12").state).toBe("unconfigured");
+    p.rules[0].enabled = true;
+    p.rules[0].startDate = "2026-10-20";
+    expect(dutyForDate(p, "2026-10-12").state).toBe("future");
+    p.roster = [];
+    expect(dutyForDate(p, "2026-10-12").state).toBe("unconfigured");
+  });
+  it("rejects ambiguous rules, people, dates and counts", () => {
+    const cases: ((p: DutyPayload) => void)[] = [
+      (p) => p.rules.push(p.rules[0]),
+      (p) => {
+        p.roster[1].order = 1;
+      },
+      (p) => {
+        p.roster[1].person = p.roster[0].person;
+      },
+      (p) => {
+        p.rules[0].dailyCount = 4;
+      },
+      (p) => {
+        p.rules[0].startDate = "2026-02-30";
+      },
+      (p) => {
+        p.exceptions = [
+          { date: "2026-10-12", kind: "休息" },
+          { date: "2026-10-12", kind: "补班" },
+        ];
+      },
+      (p) => {
+        p.exceptions = [
+          { date: "2026-10-11", kind: "换人", people: [person("A")] },
+        ];
+      },
+      (p) => {
+        p.exceptions = [
+          { date: "2026-10-12", kind: "换人", people: [person("departed")] },
+        ];
+      },
+    ];
+    for (const change of cases) {
+      const p = config();
+      change(p);
+      expect(dutyForDate(p, "2026-10-12").state).toBe("invalid");
+    }
+  });
+});
