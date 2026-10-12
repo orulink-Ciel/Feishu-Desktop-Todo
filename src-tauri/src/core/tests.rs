@@ -18,7 +18,7 @@ fn duty_cache_is_account_scoped_and_cleared_after_permission_denial() {
     ]);
     s.store.save_duty(USER, &payload).unwrap();
     assert!(s.store.duty_cache("other").unwrap().0.is_none());
-    let result = s.duty_snapshot(true).unwrap();
+    let result = s.duty_snapshot_from_source(true, true).unwrap();
     assert!(result.error.is_some());
     assert!(result.payload.is_none());
     assert!(s.store.duty_cache(USER).unwrap().0.is_none());
@@ -38,10 +38,32 @@ fn failed_duty_read_keeps_full_cache_and_does_not_change_tasks() {
         Err(AppError::new("network", "offline")),
     ]);
     s.store.save_duty(USER, &payload).unwrap();
-    let result = s.duty_snapshot(true).unwrap();
+    let result = s.duty_snapshot_from_source(true, true).unwrap();
     assert!(result.cached && result.error.is_some());
     assert_eq!(result.payload.unwrap().rules.len(), 1);
     assert!(result.last_synced_at.is_some());
+    assert_eq!(s.store.tasks(USER).unwrap().len(), 2);
+}
+#[test]
+fn unconfigured_duty_source_does_not_call_cli_or_expose_previous_cache() {
+    let mut s = service(vec![]);
+    s.store
+        .save_duty(
+            USER,
+            &crate::duty::DutyPayload {
+                roster: vec![json!({"person":"old company"})],
+                rules: vec![],
+                exceptions: vec![],
+                calendar: vec![],
+                leave: vec![],
+            },
+        )
+        .unwrap();
+    let snapshot = s.duty_snapshot_from_source(true, false).unwrap();
+    assert!(snapshot.payload.is_none());
+    assert!(snapshot.account_id.is_none());
+    assert!(snapshot.error.unwrap().contains("未配置公司值日来源"));
+    assert!(!snapshot.cached);
     assert_eq!(s.store.tasks(USER).unwrap().len(), 2);
 }
 struct FakeCli {

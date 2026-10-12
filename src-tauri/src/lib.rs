@@ -37,6 +37,9 @@ async fn get_duty(
 }
 #[tauri::command]
 async fn open_duty_url(document: bool, table: Option<String>) -> Result<(), AppError> {
+    if !duty::configured() {
+        return Err(AppError::new("setup", "未配置公司值日来源，请联系管理员。"));
+    }
     let url = if document {
         duty::DOC_URL.to_owned()
     } else {
@@ -117,6 +120,27 @@ async fn open_auth_url(
 }
 
 pub fn run() {
+    if std::env::args().any(|a| a == "--check-runtime") {
+        let result = check_bundled_runtime();
+        match result {
+            Ok(version) => println!(
+                "{}",
+                serde_json::json!({
+                    "ok": true, "platform": std::env::consts::OS,
+                    "arch": std::env::consts::ARCH, "cliVersion": version,
+                    "dutyConfigured": duty::configured()
+                })
+            ),
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"ok": false, "error": error.to_string()})
+                );
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if std::env::args().any(|a| a == "--diagnose") {
         let result = (|| -> Result<(Snapshot, duty::DutySnapshot), AppError> {
             let cli = Arc::new(NativeCli::discover(None));
@@ -193,6 +217,34 @@ pub fn run() {
         ])
         .run(context)
         .expect("Unable to start Feishu desktop widget");
+}
+fn check_bundled_runtime() -> Result<String, Box<dyn std::error::Error>> {
+    // Use only shipped resources: PATH, developer overrides and OAuth are irrelevant to this check.
+    let exe = std::env::current_exe()?;
+    let dir = exe.parent().ok_or("Missing executable directory")?;
+    let resources = if cfg!(target_os = "macos") {
+        dir.parent()
+            .ok_or("Missing app Contents directory")?
+            .join("Resources")
+    } else {
+        dir.to_path_buf()
+    };
+    let binary = resources.join("resources").join(core::CLI_FILENAME);
+    if !resources.join("resources/LARK-CLI-LICENSE").is_file() {
+        return Err("Missing embedded CLI license".into());
+    }
+    let mut command = std::process::Command::new(binary);
+    command.arg("--version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    let output = command.output()?;
+    if !output.status.success() {
+        return Err("Embedded CLI could not start".into());
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 fn tempfile_dir() -> Result<std::path::PathBuf, AppError> {
     let dir = std::env::temp_dir().join("feishu-desktop-todo-diagnostics");

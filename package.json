@@ -10,7 +10,10 @@
     "test": "vitest run",
     "tauri": "tauri",
     "desktop": "tauri dev",
-    "package": "tauri build --bundles nsis"
+    "prepare:cli": "node scripts/prepare-cli.mjs",
+    "package": "npm run prepare:cli && tauri build",
+    "package:public": "npm run prepare:cli && node scripts/package-public.mjs",
+    "collect:release": "node scripts/collect-release.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.0",
@@ -20,6 +23,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@larksuite/cli": "1.0.76",
     "@playwright/test": "^1.64.0",
     "@tauri-apps/cli": "^2.10.0",
     "@testing-library/react": "^16.3.0",

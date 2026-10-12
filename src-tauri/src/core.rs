@@ -32,6 +32,11 @@ pub trait Cli: Send + Sync {
 pub struct NativeCli {
     pub path: Option<PathBuf>,
 }
+pub const CLI_FILENAME: &str = if cfg!(windows) {
+    "lark-cli.exe"
+} else {
+    "lark-cli"
+};
 impl NativeCli {
     pub fn discover(resource_dir: Option<PathBuf>) -> Self {
         let mut candidates = vec![];
@@ -39,16 +44,23 @@ impl NativeCli {
             candidates.push(PathBuf::from(path));
         }
         if let Some(dir) = resource_dir {
-            candidates.push(dir.join("resources").join("lark-cli.exe"));
+            candidates.push(dir.join("resources").join(CLI_FILENAME));
         }
         if let Some(roaming) = std::env::var_os("APPDATA") {
             candidates.push(
-                PathBuf::from(roaming).join("npm/node_modules/@larksuite/cli/bin/lark-cli.exe"),
+                PathBuf::from(roaming)
+                    .join("npm/node_modules/@larksuite/cli/bin")
+                    .join(CLI_FILENAME),
             );
         }
+        candidates.push(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("resources")
+                .join(CLI_FILENAME),
+        );
         if let Some(paths) = std::env::var_os("PATH") {
             for dir in std::env::split_paths(&paths) {
-                candidates.push(dir.join("lark-cli.exe"));
+                candidates.push(dir.join(CLI_FILENAME));
             }
         }
         Self {
@@ -767,6 +779,22 @@ impl Service {
         self.snapshot()
     }
     pub fn duty_snapshot(&mut self, refresh: bool) -> Result<crate::duty::DutySnapshot> {
+        self.duty_snapshot_from_source(refresh, crate::duty::configured())
+    }
+    fn duty_snapshot_from_source(
+        &mut self,
+        refresh: bool,
+        configured: bool,
+    ) -> Result<crate::duty::DutySnapshot> {
+        if !configured {
+            return Ok(crate::duty::DutySnapshot {
+                account_id: None,
+                payload: None,
+                last_synced_at: None,
+                error: Some("未配置公司值日来源，请联系管理员。".into()),
+                cached: false,
+            });
+        }
         self.bootstrap()?;
         let Some(account) = self.auth.user_id.clone() else {
             return Ok(crate::duty::DutySnapshot {
@@ -811,15 +839,13 @@ impl Service {
         })
     }
     pub fn begin_login(&mut self) -> Result<LoginLink> {
+        let scopes = if crate::duty::configured() {
+            "task:task:read task:task:write base:record:read"
+        } else {
+            "task:task:read task:task:write"
+        };
         let result = self.cli.call(
-            &[
-                "auth",
-                "login",
-                "--scope",
-                "task:task:read task:task:write base:record:read",
-                "--no-wait",
-                "--json",
-            ],
+            &["auth", "login", "--scope", scopes, "--no-wait", "--json"],
             Duration::from_secs(30),
         )?;
         let code = result["device_code"]

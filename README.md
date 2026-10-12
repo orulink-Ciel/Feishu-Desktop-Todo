@@ -1,12 +1,12 @@
 # 飞书桌面待办
 
-Windows 常驻待办小窗口，展示飞书当前用户任务，完成后回写飞书。React + Tauri 2 + Rust + SQLite。首版复用飞书 CLI 的用户授权，无需业务服务器。
+Windows / macOS 常驻待办小窗口，展示飞书当前用户任务，完成后回写飞书。React + Tauri 2 + Rust + SQLite。首版复用飞书 CLI 的用户授权，无需业务服务器。
 
 开发以 [需求与开发方案](docs/需求与开发方案.md) 为准。构建、自动测试、真实 API 和手工验收分别记录在 [开发与验收记录](docs/开发与验收记录.md)。
 
 ## 使用
 
-这是源码仓库，便携程序和安装包在本地构建，不随 Git 上传。构建后的 Windows 程序附带飞书 CLI 原生程序；新机器仍需配置飞书应用并完成用户授权。程序不包含任何 CLI 应用配置或用户凭证。
+内部试用安装包通过 [GitHub Releases](https://github.com/orulink-Ciel/Feishu-Desktop-Todo/releases) 提供：Windows x64 安装程序、Apple 芯片 Mac 和 Intel Mac 的 DMG。首次设置与分发边界见 [打包与试用发布](docs/打包与试用发布.md)。安装包附带飞书 CLI 原生程序，不需要 Node.js、Rust 或额外安装 CLI；新机器仍需配置飞书应用并完成用户授权。
 
 - 今天：今天到期、此前到期和本机固定到今天的任务。
 - 全部：查看其他未完成任务；点击图钉固定到今天，不改飞书日期。
@@ -20,21 +20,21 @@ Windows 常驻待办小窗口，展示飞书当前用户任务，完成后回写
 
 公司管理入口由管理员在本地构建配置中填写，公开仓库不提供内部链接。首次使用值日功能需要 `base:record:read` 用户授权；应用“重新授权飞书”已包含该范围。字段 ID 与表 ID 在构建时固定，不允许普通用户在应用中更换来源。
 
-本地缓存位于当前 Windows 用户应用数据目录中 `com.personal.feishu-desktop-todo/tasks.db`。飞书凭证由 CLI 自己管理；本项目不读取凭证文件，不把令牌交给前端。断网显示缓存和上次更新时间，不会离线伪造完成。
+本地缓存位于 Tauri 当前用户应用数据目录中 `com.personal.feishu-desktop-todo/tasks.db`。飞书凭证由 CLI 自己管理；本项目不读取凭证文件，不把令牌交给前端。断网显示缓存和上次更新时间，不会离线伪造完成。
 
 ## 开发
 
-要求 Node.js、Rust MSVC 工具链、Visual Studio C++ Build Tools 和 WebView2。
+要求 Node.js 22 和 Rust stable。Windows 使用 MSVC、Visual Studio C++ Build Tools 和 WebView2；macOS 使用 Xcode Command Line Tools。在对应系统构建，CLI 原生程序架构与运行系统一致。
 
 ```powershell
 cd Feishu-Desktop-Todo
 npm ci
 ```
 
-源码仓库不包含 CLI 二进制文件。先安装飞书 CLI，按照 CLI 指引配置自己的飞书应用，然后复制运行文件与许可证到构建资源目录：```powershellnpm install -g @larksuite/clilark-cli config init --new```
+源码仓库不包含 CLI 二进制文件。依赖锁定 `@larksuite/cli@1.0.76`；下面命令使用官方安装器校验下载，并复制当前平台程序与许可证，不复制凭证：
 
 ```powershell
-.\scripts\prepare-cli.ps1
+npm run prepare:cli
 ```
 
 公司值日来源采用本地构建配置。复制示例后填写自己的文档地址、Base token、表 ID 和字段 ID：
@@ -70,6 +70,8 @@ cargo test --manifest-path src-tauri\Cargo.toml
 ```powershell
 npm run package
 ```
+
+`package` 保留本地公司值日配置；公开分发必须使用 `npm run package:public`，强制采用示例配置，避免将公司链接打进公开安装包。GitHub Actions 在 Windows、Apple 芯片 Mac 和 Intel Mac 上构建并验证包内 CLI，输出安装包及 SHA-256 校验文件。
 
 真实读取测试需要本机有效授权，不会修改飞书任务：
 
