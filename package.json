@@ -1,7 +1,7 @@
 {
   "name": "feishu-desktop-todo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -11,6 +11,7 @@
     "tauri": "tauri",
     "desktop": "tauri dev",
     "prepare:cli": "node scripts/prepare-cli.mjs",
+    "icons": "node scripts/generate-icons.mjs",
     "package": "npm run prepare:cli && tauri build",
     "package:public": "npm run prepare:cli && node scripts/package-public.mjs",
     "collect:release": "node scripts/collect-release.mjs"

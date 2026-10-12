@@ -4,6 +4,10 @@ Windows / macOS 常驻待办小窗口，展示飞书当前用户任务，完成�
 
 开发以 [需求与开发方案](docs/需求与开发方案.md) 为准。构建、自动测试、真实 API 和手工验收分别记录在 [开发与验收记录](docs/开发与验收记录.md)。
 
+![应用图标](public/app-icon.png)
+
+图标采用折页便签与完成勾，原始图和再生成步骤见 [图标设计](docs/图标设计.md)。
+
 ## 使用
 
 内部试用安装包通过 [GitHub Releases](https://github.com/orulink-Ciel/Feishu-Desktop-Todo/releases) 提供：Windows x64 安装程序、Apple 芯片 Mac 和 Intel Mac 的 DMG。首次设置与分发边界见 [打包与试用发布](docs/打包与试用发布.md)。安装包附带飞书 CLI 原生程序，不需要 Node.js、Rust 或额外安装 CLI；新机器仍需配置飞书应用并完成用户授权。

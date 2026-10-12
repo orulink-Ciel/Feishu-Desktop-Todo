@@ -239,7 +239,7 @@ export default function App() {
           }}
         >
           <span className="brand-mark">
-            <Check size={13} strokeWidth={2.5} />
+            <img src="/app-icon.png" alt="" draggable={false} />
           </span>
           飞书待办
         </div>

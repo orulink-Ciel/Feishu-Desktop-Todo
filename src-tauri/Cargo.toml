@@ -1,6 +1,6 @@
 [package]
 name = "feishu-desktop-todo"
-version = "0.1.0"
+version = "0.1.1"
 description = "Personal Feishu desktop task widget"
 edition = "2021"
 

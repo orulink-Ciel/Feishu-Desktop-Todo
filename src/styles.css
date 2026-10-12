@@ -211,13 +211,18 @@ ul {
   height: 100%;
 }
 .brand-mark {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  background: var(--strong-bg);
-  color: var(--strong-fg);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .window-actions {
   display: flex;

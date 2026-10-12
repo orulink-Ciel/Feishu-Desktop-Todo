@@ -23,7 +23,7 @@ if (process.platform === 'win32') {
     copyFileSync(join(root, 'src-tauri/resources', name), join(stage, 'resources', name));
   }
   executable = join(stage, 'feishu-desktop-todo.exe');
-  const installers = readdirSync(join(built, 'bundle/nsis')).filter(n => n.endsWith('.exe'));
+  const installers = readdirSync(join(built, 'bundle/nsis')).filter(n => n.endsWith('.exe') && n.includes(`_${version}_`));
   if (installers.length !== 1) throw new Error('Expected exactly one Windows installer.');
   const installer = `${prefix}-setup.exe`;
   copyFileSync(join(built, 'bundle/nsis', installers[0]), join(out, installer));
@@ -34,7 +34,7 @@ if (process.platform === 'win32') {
   const app = join(built, 'bundle/macos', apps[0]);
   execFileSync('codesign', ['--verify', '--deep', '--strict', app], { stdio: 'inherit' });
   executable = join(app, 'Contents/MacOS/feishu-desktop-todo');
-  const dmgs = readdirSync(join(built, 'bundle/dmg')).filter(n => n.endsWith('.dmg'));
+  const dmgs = readdirSync(join(built, 'bundle/dmg')).filter(n => n.endsWith('.dmg') && n.includes(`_${version}_`));
   if (dmgs.length !== 1) throw new Error('Expected exactly one DMG.');
   const dmg = `${prefix}.dmg`;
   copyFileSync(join(built, 'bundle/dmg', dmgs[0]), join(out, dmg));
@@ -48,7 +48,7 @@ if (!check.ok || !check.cliVersion.includes('1.0.76') || check.dutyConfigured) {
   throw new Error(`Public package runtime check failed: ${JSON.stringify(check)}`);
 }
 writeFileSync(join(out, `${prefix}-runtime.json`), `${JSON.stringify(check, null, 2)}\n`);
-copyFileSync(join(root, 'docs/打包与试用发布.md'), join(out, '试用说明.md'));
+copyFileSync(join(root, 'docs/打包与试用发布.md'), join(out, 'Trial-Guide.md'));
 copyFileSync(join(root, 'src-tauri/resources/LARK-CLI-LICENSE'), join(out, 'LARK-CLI-LICENSE'));
 const sums = files.map(n => `${createHash('sha256').update(readFileSync(join(out, n))).digest('hex')}  ${n}`).join('\n');
 writeFileSync(join(out, `${prefix}-SHA256SUMS.txt`), `${sums}\n`);
