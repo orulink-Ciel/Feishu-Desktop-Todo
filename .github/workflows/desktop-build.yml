@@ -129,3 +129,55 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: node scripts/publish-release.mjs release/upload "$RELEASE_TAG" "$GITHUB_SHA"
+  verify-published:
+    name: Verify published update (${{ matrix.channel }}, ${{ matrix.target }})
+    needs: publish
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            channel: generic
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            channel: internal
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            channel: generic
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            channel: generic
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-${{ matrix.channel }}-${{ matrix.target }}
+          path: release/verify
+      - name: Verify live Windows update signature without installing an update
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -LiteralPath release/verify -Filter '*-setup.exe' | Select-Object -First 1
+          $installedDir = Join-Path $env:RUNNER_TEMP 'FeishuUpdateVerification'
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList '/S', "/D=$installedDir" -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
+          $result = & (Join-Path $installedDir 'feishu-desktop-todo.exe') --check-update | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or !$result.ok -or !$result.signatureVerified -or $result.installed) { throw 'Published update signature check failed.' }
+          $result | ConvertTo-Json | Set-Content release/verify/update-check.json
+      - name: Verify live macOS update signature without installing an update
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          archive=$(find release/verify -name '*.app.tar.gz' -print -quit)
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          app=$(find "$RUNNER_TEMP" -maxdepth 1 -name '*.app' -print -quit)
+          "$app/Contents/MacOS/feishu-desktop-todo" --check-update > release/verify/update-check.json
+          python3 -c 'import json; d=json.load(open("release/verify/update-check.json")); assert d["ok"] and d["signatureVerified"] and not d["installed"], d'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: update-check-${{ matrix.channel }}-${{ matrix.target }}
+          path: release/verify/update-check.json
+          if-no-files-found: error
+          retention-days: 14

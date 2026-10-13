@@ -141,6 +141,10 @@ async fn open_auth_url(
     .await
 }
 
+fn app_context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
+}
+
 pub fn run() {
     if std::env::args().any(|a| a == "--check-update") {
         check_published_update();
@@ -190,7 +194,7 @@ pub fn run() {
         }
         return;
     }
-    let context = tauri::generate_context!();
+    let context = app_context();
     #[cfg(debug_assertions)]
     let context = {
         let mut context = context;
@@ -253,7 +257,7 @@ pub fn run() {
 }
 fn check_published_update() {
     // Diagnostics download and verify the published package, but never install or open user data.
-    let mut context = tauri::generate_context!();
+    let mut context = app_context();
     context.config_mut().app.windows.clear();
     tauri::Builder::default()
         .plugin(
