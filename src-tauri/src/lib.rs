@@ -5,6 +5,28 @@ use core::{
 };
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
+use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_window_state::AppHandleExt;
+
+fn update_target() -> String {
+    let os = if cfg!(target_os = "macos") {
+        "darwin"
+    } else {
+        std::env::consts::OS
+    };
+    let channel = if duty::configured() { "-internal" } else { "" };
+    format!("{os}{channel}-{}", std::env::consts::ARCH)
+}
+
+#[tauri::command]
+fn prepare_update(app: tauri::AppHandle) -> Result<(), String> {
+    app.save_window_state(
+        tauri_plugin_window_state::StateFlags::POSITION
+            | tauri_plugin_window_state::StateFlags::SIZE
+            | tauri_plugin_window_state::StateFlags::VISIBLE,
+    )
+    .map_err(|_| "无法保存窗口位置，请重试更新。".to_owned())
+}
 type Shared = Arc<Mutex<Service>>;
 async fn execute<T: Send + 'static>(
     state: tauri::State<'_, Shared>,
@@ -120,6 +142,10 @@ async fn open_auth_url(
 }
 
 pub fn run() {
+    if std::env::args().any(|a| a == "--check-update") {
+        check_published_update();
+        return;
+    }
     if std::env::args().any(|a| a == "--check-runtime") {
         let result = check_bundled_runtime();
         match result {
@@ -128,7 +154,7 @@ pub fn run() {
                 serde_json::json!({
                     "ok": true, "platform": std::env::consts::OS,
                     "arch": std::env::consts::ARCH, "cliVersion": version,
-                    "dutyConfigured": duty::configured()
+                    "dutyConfigured": duty::configured(), "updateTarget": update_target()
                 })
             ),
             Err(error) => {
@@ -177,6 +203,12 @@ pub fn run() {
         context
     };
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .target(update_target())
+                .build(),
+        )
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
@@ -213,10 +245,56 @@ pub fn run() {
             open_task_url,
             open_auth_url,
             get_duty,
-            open_duty_url
+            open_duty_url,
+            prepare_update
         ])
         .run(context)
         .expect("Unable to start Feishu desktop widget");
+}
+fn check_published_update() {
+    // Diagnostics download and verify the published package, but never install or open user data.
+    let mut context = tauri::generate_context!();
+    context.config_mut().app.windows.clear();
+    tauri::Builder::default()
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .target(update_target())
+                .build(),
+        )
+        .setup(|app| {
+            let app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let result = async {
+                    let update = app
+                        .updater_builder()
+                        .timeout(std::time::Duration::from_secs(120))
+                        // Inspect the currently advertised package even when it is our own version.
+                        .version_comparator(|_, _| true)
+                        .build()?
+                        .check()
+                        .await?
+                        .ok_or("The feed did not contain a package")?;
+                    let bytes = update.download(|_, _| {}, || {}).await?;
+                    Ok::<_, Box<dyn std::error::Error>>(serde_json::json!({
+                        "ok": true, "updateTarget": update_target(), "version": update.version,
+                        "signatureVerified": true, "downloadBytes": bytes.len(), "installed": false
+                    }))
+                }
+                .await;
+                let (value, code) = match result {
+                    Ok(value) => (value, 0),
+                    Err(error) => (
+                        serde_json::json!({ "ok": false, "error": error.to_string() }),
+                        1,
+                    ),
+                };
+                println!("{value}");
+                app.exit(code);
+            });
+            Ok(())
+        })
+        .run(context)
+        .expect("Unable to verify published update");
 }
 fn check_bundled_runtime() -> Result<String, Box<dyn std::error::Error>> {
     // Use only shipped resources: PATH, developer overrides and OAuth are irrelevant to this check.

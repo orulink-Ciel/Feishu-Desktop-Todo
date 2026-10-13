@@ -1,6 +1,6 @@
 [package]
 name = "feishu-desktop-todo"
-version = "0.1.1"
+version = "0.1.2"
 description = "Personal Feishu desktop task widget"
 edition = "2021"
 
@@ -22,6 +22,8 @@ uuid = { version = "1", features = ["v4"] }
 url = "2"
 open = "5"
 tauri-plugin-window-state = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 
 [dev-dependencies]
 tempfile = "3"

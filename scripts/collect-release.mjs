@@ -9,11 +9,14 @@ const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).ver
 const target = process.argv[2];
 if (!target) throw new Error('Pass the Rust target, e.g. x86_64-pc-windows-msvc.');
 const built = join(root, 'src-tauri/target', target, 'release');
-const out = join(root, 'release', target);
+const internal = process.env.FEISHU_TODO_PUBLIC_BUILD === '0';
+const outputTarget = internal ? `internal-${target}` : target;
+const out = join(root, 'release', outputTarget);
 mkdirSync(out, { recursive: true });
-const prefix = `Feishu-Desktop-Todo-${version}-${target}`;
+const prefix = internal ? `Feishu-Desktop-Todo-${version}-internal-windows-x64` : `Feishu-Desktop-Todo-${version}-${target}`;
 let executable;
 let files;
+let updaterFile;
 if (process.platform === 'win32') {
   const stage = join(root, 'artifacts', `portable-${target}`);
   mkdirSync(stage, { recursive: true });
@@ -28,6 +31,8 @@ if (process.platform === 'win32') {
   const installer = `${prefix}-setup.exe`;
   copyFileSync(join(built, 'bundle/nsis', installers[0]), join(out, installer));
   files = [installer];
+  updaterFile = installer;
+  copyFileSync(join(built, 'bundle/nsis', `${installers[0]}.sig`), join(out, `${updaterFile}.sig`));
 } else if (process.platform === 'darwin') {
   const apps = readdirSync(join(built, 'bundle/macos')).filter(n => n.endsWith('.app'));
   if (apps.length !== 1) throw new Error('Expected exactly one macOS app.');
@@ -40,13 +45,20 @@ if (process.platform === 'win32') {
   copyFileSync(join(built, 'bundle/dmg', dmgs[0]), join(out, dmg));
   execFileSync('hdiutil', ['verify', join(out, dmg)], { stdio: 'inherit' });
   files = [dmg];
+  updaterFile = `${prefix}.app.tar.gz`;
+  copyFileSync(`${app}.tar.gz`, join(out, updaterFile));
+  copyFileSync(`${app}.tar.gz.sig`, join(out, `${updaterFile}.sig`));
+  files.push(updaterFile);
 } else {
   throw new Error('Preview distribution currently supports Windows and macOS.');
 }
 const check = JSON.parse(execFileSync(executable, ['--check-runtime'], { encoding: 'utf8', timeout: 30000 }));
-if (!check.ok || !check.cliVersion.includes('1.0.76') || check.dutyConfigured) {
-  throw new Error(`Public package runtime check failed: ${JSON.stringify(check)}`);
+if (!check.ok || !check.cliVersion.includes('1.0.76') || check.dutyConfigured !== internal) {
+  throw new Error(`Package runtime check failed: ${JSON.stringify(check)}`);
 }
+const expectedTarget = `${check.platform === 'macos' ? 'darwin' : check.platform}${internal ? '-internal' : ''}-${check.arch}`;
+if (check.updateTarget !== expectedTarget) throw new Error('Updater channel does not match packaged duty configuration.');
+writeFileSync(join(out, `${prefix}-updater.json`), `${JSON.stringify({ version, target: check.updateTarget, file: updaterFile, signature: readFileSync(join(out, `${updaterFile}.sig`), 'utf8').trim() }, null, 2)}\n`);
 writeFileSync(join(out, `${prefix}-runtime.json`), `${JSON.stringify(check, null, 2)}\n`);
 copyFileSync(join(root, 'docs/打包与试用发布.md'), join(out, 'Trial-Guide.md'));
 copyFileSync(join(root, 'src-tauri/resources/LARK-CLI-LICENSE'), join(out, 'LARK-CLI-LICENSE'));

@@ -14,6 +14,8 @@ Windows / macOS 常驻待办小窗口，展示飞书当前用户任务，完成�
 
 本公司 Windows 同事使用 Release 中带 `internal-windows-x64` 的安装包，它包含值日来源配置；三个通用包不预设公司值日来源。所有安装包均不包含飞书登录凭证，读取值日表需要相应组织权限。
 
+0.1.2 起支持应用内更新：启动后检查，每 6 小时再检查，设置中可手动检查。用户点击后下载安装并重启，更新包验证签名，公司版与通用版分别更新。旧版本需要先手动安装一次；发布流程见 [自动更新](docs/自动更新.md)。
+
 - 今天：今天到期、此前到期和本机固定到今天的任务。
 - 全部：查看其他未完成任务；点击图钉固定到今天，不改飞书日期。
 - 点击标题：优先直接唤起飞书客户端任务详情；系统无法唤起时回退网页。任务行右侧来源图标可打开文档或业务来源。
@@ -77,7 +79,7 @@ cargo test --manifest-path src-tauri\Cargo.toml
 npm run package
 ```
 
-`package` 保留本地公司值日配置；公开分发必须使用 `npm run package:public`，强制采用示例配置，避免将公司链接打进公开安装包。GitHub Actions 在 Windows、Apple 芯片 Mac 和 Intel Mac 上构建并验证包内 CLI，输出安装包及 SHA-256 校验文件。
+`package` 保留本地公司值日配置；通用分发使用 `npm run package:public`，强制采用示例配置。打包需要原更新签名密钥与密码，环境变量设置见发布说明；普通源码验证可使用 `npm run tauri -- build --no-bundle`。GitHub Actions 分别构建 Windows 通用、Windows 公司、Apple 芯片 Mac 与 Intel Mac 包，输出签名更新包、安装包及 SHA-256 校验文件。
 
 真实读取测试需要本机有效授权，不会修改飞书任务：
 

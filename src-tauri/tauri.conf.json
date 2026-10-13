@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "飞书桌面待办",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.personal.feishu-desktop-todo",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -32,7 +32,13 @@
   },
   "bundle": {
     "active": true,
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "targets": ["nsis"],
     "resources": ["resources/lark-cli.exe", "resources/LARK-CLI-LICENSE"],
     "windows": {
@@ -41,6 +47,18 @@
         "languages": ["SimpChinese"],
         "installMode": "currentUser"
       }
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/orulink-Ciel/Feishu-Desktop-Todo/releases/download/desktop-updates/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      },
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDRGNzM1RTk4NjA5NDREOUQKUldTZFRaUmdtRjV6VDdiRUtYVW1JYlE5Q2ZmaXRMSXk2a0l0MW9KUXVTVXhoOERCT0ZMSzZ3R3oK"
     }
   }
 }

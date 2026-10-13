@@ -27,6 +27,7 @@ import { useTaskBoard } from "./useTaskBoard";
 import { useTheme } from "./themes";
 import { Appearance } from "./Appearance";
 import { DutyCard } from "./DutyCard";
+import { UpdatePanel } from "./UpdatePanel";
 
 export default function App() {
   const board = useTaskBoard(bridge);
@@ -534,6 +535,7 @@ export default function App() {
           </button>
         </div>
       </footer>
+      <UpdatePanel settingsOpen={settingsOpen} taskBusy={board.working} />
       {appearanceOpen && (
         <Appearance {...appearance} onClose={closeAppearance} />
       )}
