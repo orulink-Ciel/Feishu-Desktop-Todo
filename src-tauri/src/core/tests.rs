@@ -151,6 +151,36 @@ fn unconfigured_cli_has_clear_setup_state_without_old_account_cache() {
     assert!(snapshot.tasks.is_empty());
 }
 #[test]
+fn expired_login_hides_retained_identity_and_account_cache() {
+    let mut old_identity = identity(USER);
+    old_identity["identities"]["user"]["available"] = json!(false);
+    let mut s = service(vec![Ok(old_identity), Ok(identity("ou_new_user"))]);
+    let snapshot = s.bootstrap().unwrap();
+    assert_eq!(snapshot.auth.state, "needs_auth");
+    assert!(snapshot.auth.user_id.is_none());
+    assert!(snapshot.auth.user_name.is_none());
+    assert!(!snapshot.auth.can_read && !snapshot.auth.can_write);
+    assert!(snapshot.tasks.is_empty());
+    assert!(snapshot.last_synced_at.is_none());
+    // Keep the old account's stored data separate from a subsequent login.
+    assert_eq!(s.store.tasks(USER).unwrap().len(), 2);
+    let reconnected = s.bootstrap().unwrap();
+    assert_eq!(reconnected.auth.user_id.as_deref(), Some("ou_new_user"));
+    assert!(reconnected.auth.can_read);
+    assert!(reconnected.tasks.is_empty());
+}
+#[test]
+fn available_login_without_identity_cannot_read_or_write_tasks() {
+    let mut response = identity("");
+    response["identities"]["user"]["userName"] = json!("残留姓名");
+    let snapshot = service(vec![Ok(response)]).bootstrap().unwrap();
+    assert!(snapshot.auth.user_id.is_none());
+    assert!(snapshot.auth.user_name.is_none());
+    assert!(!snapshot.auth.can_read && !snapshot.auth.can_write);
+    assert!(snapshot.tasks.is_empty());
+    assert_eq!(snapshot.auth.message, "请登录并授权飞书任务。");
+}
+#[test]
 fn successful_write_without_readback_never_marks_local_done() {
     let mut s = service(vec![
         Ok(identity(USER)),

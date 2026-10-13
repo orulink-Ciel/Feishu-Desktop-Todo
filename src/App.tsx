@@ -55,6 +55,11 @@ export default function App() {
   const [now, setNow] = useState(Date.now());
   const [dutyRefreshKey, setDutyRefreshKey] = useState(0);
   const snapshot = board.snapshot;
+  const connected = Boolean(
+    snapshot?.auth.state === "ready" &&
+    snapshot.auth.userId &&
+    snapshot.auth.canRead,
+  );
   const today = dateKey(now);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 15000);
@@ -511,14 +516,14 @@ export default function App() {
           title="飞书登录与授权"
           onClick={() => {
             setSettingsOpen(false);
-            if (!snapshot?.auth.canRead) void beginLogin();
+            if (!connected) void beginLogin();
             else setSettingsOpen(true);
           }}
         >
           <span
-            className={`status-dot ${snapshot?.auth.canRead && !board.error ? "connected" : ""}`}
+            className={`status-dot ${connected && !board.error ? "connected" : ""}`}
           />
-          {snapshot?.auth.userName || "未连接飞书"}
+          {connected ? snapshot?.auth.userName || "已连接飞书" : "未连接飞书"}
         </button>
         <div className="footer-right">
           <span

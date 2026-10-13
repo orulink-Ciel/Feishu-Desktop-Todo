@@ -12,7 +12,7 @@ const api = path => JSON.parse(execFileSync('gh', ['api', `repos/${repo}/${path}
 // The get-by-tag endpoint omits drafts. Authenticated release listing includes them.
 const findRelease = tagName => api('releases?per_page=100').find(r => r.tag_name === tagName);
 const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
-const notes = '新增应用内更新：启动后检查，每 6 小时检查一次；设置中可手动检查。点击下载安装后重启，保留登录、主题及窗口位置。公司版和通用版分别更新，下载包验证签名。';
+const notes = '修复未登录或授权失效时仍显示上次账号姓名的问题：未连接时显示“未连接飞书”，不加载旧账号任务缓存。重新授权后显示当前账号，保留各账号独立缓存及窗口、主题设置。0.1.2 用户可在设置中检查更新。';
 const manifest = createManifest(dir, tag, notes);
 if (manifest.version !== version) throw new Error('Tag does not match source version.');
 // Never let an older completed workflow roll a newer update feed back.
@@ -31,7 +31,7 @@ const notesFile = join(dir, 'Release-Notes.md');
 writeFileSync(notesFile, `飞书桌面待办 v${version} 内部试用版\n\n${notes}\n\n旧版本 0.1.1 需手动安装一次。公司 Windows 使用 internal 安装包；Mac 使用对应架构 DMG。Mac 仍为临时签名、未公证，首次授权与真实 Mac 更新需实机验收。\n`);
 let release = findRelease(tag);
 if (!release) {
-  gh(['release', 'create', tag, '--target', commit, '--title', `飞书桌面待办 ${tag}：应用内更新`, '--notes-file', notesFile, '--draft', '--prerelease']);
+  gh(['release', 'create', tag, '--target', commit, '--title', `飞书桌面待办 ${tag}：修复未登录姓名显示`, '--notes-file', notesFile, '--draft', '--prerelease']);
   release = findRelease(tag);
 }
 if (!release) throw new Error('Unable to read back the created draft release.');

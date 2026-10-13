@@ -539,20 +539,27 @@ impl Service {
             .split_whitespace()
             .collect();
         let available = user["available"].as_bool().unwrap_or(false);
+        let authenticated = available && id.is_some();
         let can_read = scopes.contains("task:task:read") || scopes.contains("task:task:write");
         let can_write = scopes.contains("task:task:write");
         self.auth = Auth {
-            state: if available && id.is_some() && can_read {
+            state: if authenticated && can_read {
                 "ready"
             } else {
                 "needs_auth"
             }
             .into(),
-            user_id: id,
-            user_name: user["userName"].as_str().map(String::from),
-            can_read: available && can_read,
-            can_write: available && can_write,
-            message: if !available {
+            // CLI status may retain account metadata after authorization expires.
+            // Only a currently available identity can select its cache or UI name.
+            user_id: id.filter(|_| authenticated),
+            user_name: if authenticated {
+                user["userName"].as_str().map(String::from)
+            } else {
+                None
+            },
+            can_read: authenticated && can_read,
+            can_write: authenticated && can_write,
+            message: if !authenticated {
                 "请登录并授权飞书任务。"
             } else if !can_read {
                 "当前账号尚未授权任务读取，请连接飞书。"
