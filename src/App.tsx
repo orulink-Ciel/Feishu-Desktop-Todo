@@ -43,6 +43,8 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [updateSettingsHost, setUpdateSettingsHost] =
+    useState<HTMLDivElement | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [login, setLogin] = useState<
     (LoginLink & { expiresAt: number }) | null
@@ -500,6 +502,7 @@ export default function App() {
           >
             重新授权飞书 <ArrowUpRight size={13} />
           </button>
+          <div className="update-settings-host" ref={setUpdateSettingsHost} />
         </div>
       )}
       <footer className="footer">
@@ -535,7 +538,11 @@ export default function App() {
           </button>
         </div>
       </footer>
-      <UpdatePanel settingsOpen={settingsOpen} taskBusy={board.working} />
+      <UpdatePanel
+        settingsOpen={settingsOpen}
+        settingsHost={updateSettingsHost}
+        taskBusy={board.working}
+      />
       {appearanceOpen && (
         <Appearance {...appearance} onClose={closeAppearance} />
       )}

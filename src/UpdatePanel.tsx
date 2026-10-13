@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, LoaderCircle, X } from "lucide-react";
 import { updateApi, type PendingUpdate, type UpdateApi } from "./updates";
 
@@ -13,10 +14,12 @@ type Phase =
   | "error";
 export function UpdatePanel({
   settingsOpen,
+  settingsHost,
   taskBusy,
   api = updateApi,
 }: {
   settingsOpen: boolean;
+  settingsHost?: HTMLElement | null;
   taskBusy: boolean;
   api?: UpdateApi;
 }) {
@@ -120,13 +123,21 @@ export function UpdatePanel({
     }
   };
   const installing = phase === "downloading" || phase === "installing";
+  const placeSettings = (content: React.ReactNode) =>
+    !settingsOpen
+      ? null
+      : settingsHost === undefined
+        ? content
+        : settingsHost
+          ? createPortal(content, settingsHost)
+          : null;
   if (!api.enabled)
-    return settingsOpen ? (
-      <div className="update-settings">应用更新仅在桌面版可用</div>
-    ) : null;
+    return placeSettings(
+      <div className="update-settings">应用更新仅在桌面版可用</div>,
+    );
   return (
     <>
-      {settingsOpen && (
+      {placeSettings(
         <div className="update-settings">
           <div>
             <span>应用版本 {version && `v${version}`}</span>
@@ -157,7 +168,7 @@ export function UpdatePanel({
               查看更新 <Download size={13} />
             </button>
           )}
-        </div>
+        </div>,
       )}
       {available && !dismissed && !dialog && (
         <div className="update-banner" role="status">
