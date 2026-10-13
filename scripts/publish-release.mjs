@@ -31,8 +31,12 @@ const notesFile = join(dir, 'Release-Notes.md');
 writeFileSync(notesFile, `飞书桌面待办 v${version} 内部试用版\n\n${notes}\n\n旧版本 0.1.1 需手动安装一次。公司 Windows 使用 internal 安装包；Mac 使用对应架构 DMG。Mac 仍为临时签名、未公证，首次授权与真实 Mac 更新需实机验收。\n`);
 let release = findRelease(tag);
 if (!release) {
-  gh(['release', 'create', tag, '--target', commit, '--title', `飞书桌面待办 ${tag}：修复未登录姓名显示`, '--notes-file', notesFile, '--draft', '--prerelease']);
-  release = findRelease(tag);
+  // Release listings can briefly lag behind creation. Keep the POST response's
+  // ID instead of immediately depending on that eventually consistent list.
+  release = JSON.parse(execFileSync('gh', ['api', `repos/${repo}/releases`, '--method', 'POST', '--input', '-'], {
+    encoding: 'utf8',
+    input: JSON.stringify({ tag_name: tag, target_commitish: commit, name: `飞书桌面待办 ${tag}：修复未登录姓名显示`, body: readFileSync(notesFile, 'utf8'), draft: true, prerelease: true, make_latest: 'false' }),
+  }));
 }
 if (!release) throw new Error('Unable to read back the created draft release.');
 let ref;
@@ -46,7 +50,7 @@ if (ref.object.sha !== commit) throw new Error('Existing tag points to a differe
 // Published packages are immutable; an identical rerun can repair a failed feed publication.
 const files = readdirSync(dir).filter(n => n !== 'latest.json');
 if (release.draft) gh(['release', 'upload', tag, ...files.map(n => join(dir, n)), '--clobber']);
-release = findRelease(tag);
+release = api(`releases/${release.id}`);
 for (const name of files) {
   const asset = release.assets.find(a => a.name === name);
   const digest = `sha256:${createHash('sha256').update(readFileSync(join(dir, name))).digest('hex')}`;
