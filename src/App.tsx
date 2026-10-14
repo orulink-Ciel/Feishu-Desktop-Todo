@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import QRCode from "qrcode";
 import {
   ArrowUpRight,
+  CalendarDays,
   Check,
   ChevronDown,
   ChevronRight,
@@ -21,13 +22,14 @@ import {
   X,
 } from "lucide-react";
 import { bridge } from "./bridge";
-import { dateKey, dateLabel, errorMessage, partitionTasks } from "./tasks";
+import { dateKey, dateLabel, dueDate, errorMessage, partitionTasks } from "./tasks";
 import type { LoginLink, Task } from "./types";
 import { useTaskBoard } from "./useTaskBoard";
 import { useTheme } from "./themes";
 import { Appearance } from "./Appearance";
 import { DutyCard } from "./DutyCard";
 import { UpdatePanel } from "./UpdatePanel";
+import { WeeklyCalendar } from "./WeeklyCalendar";
 
 export default function App() {
   const board = useTaskBoard(bridge);
@@ -40,9 +42,12 @@ export default function App() {
       ?.focus();
   };
   const [tab, setTab] = useState<"today" | "all">("today");
+  const [page, setPage] = useState<"tasks" | "week">("tasks");
   const [search, setSearch] = useState("");
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsPanelRef = useRef<HTMLDivElement>(null);
+  const settingsTriggerRef = useRef<HTMLButtonElement>(null);
   const [updateSettingsHost, setUpdateSettingsHost] =
     useState<HTMLDivElement | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
@@ -54,6 +59,29 @@ export default function App() {
   const [confirm, setConfirm] = useState<Task | null>(null);
   const [now, setNow] = useState(Date.now());
   const [dutyRefreshKey, setDutyRefreshKey] = useState(0);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const dismissOutside = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (
+        settingsPanelRef.current?.contains(target) ||
+        settingsTriggerRef.current?.contains(target)
+      ) return;
+      setSettingsOpen(false);
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setSettingsOpen(false);
+      settingsTriggerRef.current?.focus();
+    };
+    document.addEventListener("pointerdown", dismissOutside);
+    document.addEventListener("keydown", dismissOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", dismissOutside);
+      document.removeEventListener("keydown", dismissOnEscape);
+    };
+  }, [settingsOpen]);
   const snapshot = board.snapshot;
   const connected = Boolean(
     snapshot?.auth.state === "ready" &&
@@ -166,7 +194,7 @@ export default function App() {
           <div className="task-meta">
             <span
               className={
-                groups.overdue.some((t) => t.guid === task.guid)
+                Boolean(dueDate(task) && dueDate(task)! < today)
                   ? "due overdue"
                   : "due"
               }
@@ -249,7 +277,7 @@ export default function App() {
           <span className="brand-mark">
             <img src="/app-icon.png" alt="" draggable={false} />
           </span>
-          飞书待办
+          轻列便签
         </div>
         <div className="window-actions">
           <button
@@ -305,7 +333,36 @@ export default function App() {
           浏览器预览 · 示例数据，操作不会写入飞书
         </div>
       )}
+      <nav className="page-nav" aria-label="页面">
+        <button
+          className={page === "tasks" ? "active" : ""}
+          aria-current={page === "tasks" ? "page" : undefined}
+          onClick={() => setPage("tasks")}
+        >
+          任务
+        </button>
+        <button
+          className={page === "week" ? "active" : ""}
+          aria-current={page === "week" ? "page" : undefined}
+          onClick={() => setPage("week")}
+        >
+          <CalendarDays size={13} /> 周历
+        </button>
+      </nav>
+      {page === "week" ? (
+        <WeeklyCalendar
+          tasks={allTasks}
+          today={today}
+          loading={board.loading}
+          canRead={Boolean(snapshot?.auth.canRead)}
+          loginMessage={snapshot?.auth.message ?? ""}
+          onLogin={() => void beginLogin()}
+          renderTask={renderTask}
+        />
+      ) : (
+        <>
       <div className="hero">
+        <img className="hero-motif" src="/app-icon.png" alt="" />
         <div className="date-heading">{dateHeading}</div>
         <div className="headline">
           <div>
@@ -462,6 +519,8 @@ export default function App() {
           </>
         )}
       </main>
+        </>
+      )}
       {board.notice && (
         <div className="toast" role="status">
           <CircleCheck size={15} />
@@ -469,10 +528,13 @@ export default function App() {
         </div>
       )}
       {settingsOpen && (
-        <div className="settings-panel">
+        <div className="settings-panel" id="settings-panel" ref={settingsPanelRef}>
           <button
             className="appearance-setting"
-            onClick={() => setAppearanceOpen(true)}
+            onClick={() => {
+              setSettingsOpen(false);
+              setAppearanceOpen(true);
+            }}
           >
             <span>
               <Palette size={14} /> 外观主题
@@ -537,6 +599,9 @@ export default function App() {
             className="icon-button"
             title="设置"
             aria-label="设置"
+            aria-expanded={settingsOpen}
+            aria-controls="settings-panel"
+            ref={settingsTriggerRef}
             onClick={() => setSettingsOpen(!settingsOpen)}
           >
             <Settings2 size={14} />

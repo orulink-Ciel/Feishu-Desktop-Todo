@@ -12,7 +12,7 @@ const api = path => JSON.parse(execFileSync('gh', ['api', `repos/${repo}/${path}
 // The get-by-tag endpoint omits drafts. Authenticated release listing includes them.
 const findRelease = tagName => api('releases?per_page=100').find(r => r.tag_name === tagName);
 const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
-const notes = '修复未登录或授权失效时仍显示上次账号姓名的问题：未连接时显示“未连接飞书”，不加载旧账号任务缓存。重新授权后显示当前账号，保留各账号独立缓存及窗口、主题设置。0.1.2 用户可在设置中检查更新。';
+const notes = '新增独立周历页面，按日期查看一周任务截止安排；更新三套主题视觉与主题预览，并优化主题和设置卡片的自动收起交互。应用名称与图标同步更新。';
 const manifest = createManifest(dir, tag, notes);
 if (manifest.version !== version) throw new Error('Tag does not match source version.');
 // Never let an older completed workflow roll a newer update feed back.
@@ -35,7 +35,7 @@ if (!release) {
   // ID instead of immediately depending on that eventually consistent list.
   release = JSON.parse(execFileSync('gh', ['api', `repos/${repo}/releases`, '--method', 'POST', '--input', '-'], {
     encoding: 'utf8',
-    input: JSON.stringify({ tag_name: tag, target_commitish: commit, name: `飞书桌面待办 ${tag}：修复未登录姓名显示`, body: readFileSync(notesFile, 'utf8'), draft: true, prerelease: true, make_latest: 'false' }),
+    input: JSON.stringify({ tag_name: tag, target_commitish: commit, name: `轻列便签 ${tag}：周历与界面体验优化`, body: readFileSync(notesFile, 'utf8'), draft: true, prerelease: true, make_latest: 'false' }),
   }));
 }
 if (!release) throw new Error('Unable to read back the created draft release.');

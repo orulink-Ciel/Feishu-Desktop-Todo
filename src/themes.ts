@@ -1,15 +1,30 @@
 import { useLayoutEffect, useState } from "react";
 
 export const themes = [
-  { id: "mist", name: "雾蓝", description: "柔和蓝灰 · 浮层卡片" },
-  { id: "paper", name: "暖纸", description: "暖白茶褐 · 手账质感" },
-  { id: "graphite", name: "墨夜", description: "炭黑银灰 · 安静专注" },
-  { id: "ocean", name: "深海", description: "深蓝青绿 · 清晰沉稳" },
-  { id: "rose", name: "暮紫", description: "灰紫浅粉 · 轻盈柔和" },
-  { id: "minimal", name: "素白", description: "黑白细线 · 极简列表" },
+  {
+    id: "mist",
+    name: "轻序",
+    description: "奶油白 · 陶土红 · 鼠尾草绿",
+    mood: "温暖、从容",
+    mark: "sunrise",
+  },
+  {
+    id: "ocean",
+    name: "日行",
+    description: "雾白 · 深青 · 玉绿",
+    mood: "清爽、直接",
+    mark: "calendar",
+  },
+  {
+    id: "graphite",
+    name: "桌序",
+    description: "深海军蓝 · 薰衣草紫 · 荧光绿",
+    mood: "鲜明、专注",
+    mark: "layers",
+  },
 ] as const;
 export type ThemeId = (typeof themes)[number]["id"];
-const storageKey = "feishu-todo.appearance.v1";
+const storageKey = "feishu-todo.appearance.v2";
 
 export function readTheme(): ThemeId {
   try {

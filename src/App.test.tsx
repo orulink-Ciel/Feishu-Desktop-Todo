@@ -57,3 +57,25 @@ it("keeps the connected name for read-only task authorization", () => {
   show({ ...connected, canWrite: false });
   expect(screen.getByRole("button", { name: "当前用户" })).toBeTruthy();
 });
+it("closes the appearance panel after selecting a theme", () => {
+  show(connected);
+  fireEvent.click(screen.getByRole("button", { name: "切换主题" }));
+  expect(screen.getByRole("dialog", { name: "选择你的风格" })).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "主题：桌序" }));
+  expect(screen.queryByRole("dialog", { name: "选择你的风格" })).toBeNull();
+});
+it("closes settings when clicking outside the settings card", () => {
+  show(connected);
+  fireEvent.click(screen.getByRole("button", { name: "设置" }));
+  expect(screen.getByText("自动同步")).toBeTruthy();
+  fireEvent.pointerDown(document.body);
+  expect(screen.queryByText("自动同步")).toBeNull();
+});
+it("opens the weekly calendar as a separate page", () => {
+  show(connected);
+  fireEvent.click(screen.getByRole("button", { name: /周历/ }));
+  expect(screen.getByRole("main", { name: "一周任务截止日" })).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "周历" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "今日待办" })).toBeNull();
+  expect(screen.getByRole("button", { name: "任务" })).toBeTruthy();
+});
