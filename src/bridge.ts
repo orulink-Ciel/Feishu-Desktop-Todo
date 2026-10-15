@@ -1,8 +1,18 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import {
+  disable as disableAutostart,
+  enable as enableAutostart,
+  isEnabled as isAutostartEnabled,
+} from "@tauri-apps/plugin-autostart";
 import type { Bridge, Snapshot, Task } from "./types";
 import { dateKey } from "./tasks";
 const native: Bridge = {
   preview: false,
+  autostartEnabled: isAutostartEnabled,
+  setAutostart: async (enabled) => {
+    if (enabled) await enableAutostart();
+    else await disableAutostart();
+  },
   duty: (refresh) => invoke("get_duty", { refresh }),
   openDuty: (document, table) =>
     invoke("open_duty_url", { document, table: table ?? null }),
@@ -87,9 +97,14 @@ export function previewBridge(): Bridge {
     lastSyncedAt: now,
     preferences: { intervalSeconds: 300, alwaysOnTop: false },
   };
+  let autostartEnabled = false;
   const clone = () => structuredClone(state);
   return {
     preview: true,
+    autostartEnabled: async () => autostartEnabled,
+    setAutostart: async (enabled) => {
+      autostartEnabled = enabled;
+    },
     duty: async () => ({
       accountId: "preview",
       payload: {

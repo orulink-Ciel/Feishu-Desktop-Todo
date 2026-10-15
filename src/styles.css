@@ -952,6 +952,61 @@ h1 {
   background: var(--surface);
   font-size: 11px;
 }
+.settings-panel .autostart-setting {
+  margin-top: 12px;
+}
+.setting-switch {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 20px;
+  flex: 0 0 auto;
+  align-items: center;
+  cursor: pointer;
+}
+.setting-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.setting-switch span {
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 140ms ease;
+}
+.setting-switch span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px #0002;
+  transition: transform 140ms ease;
+}
+.setting-switch input:checked + span {
+  background: var(--accent);
+}
+.setting-switch input:checked + span::after {
+  transform: translateX(14px);
+}
+.setting-switch input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.setting-switch input:disabled + span {
+  opacity: 0.55;
+  cursor: wait;
+}
+.settings-panel p.autostart-hint {
+  margin-top: 5px;
+  margin-bottom: 2px;
+}
 .settings-panel p {
   font-size: 10px;
   color: var(--muted);

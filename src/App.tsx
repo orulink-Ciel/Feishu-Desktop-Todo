@@ -46,6 +46,8 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [autostartLoading, setAutostartLoading] = useState(true);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const settingsTriggerRef = useRef<HTMLButtonElement>(null);
   const [updateSettingsHost, setUpdateSettingsHost] =
@@ -93,6 +95,34 @@ export default function App() {
     const timer = setInterval(() => setNow(Date.now()), 15000);
     return () => clearInterval(timer);
   }, []);
+  useEffect(() => {
+    let active = true;
+    void bridge
+      .autostartEnabled()
+      .then((enabled) => {
+        if (active) setAutostartEnabled(enabled);
+      })
+      .catch(() => {
+        if (active) board.setError("无法读取开机自启动状态，请重启应用后重试。");
+      })
+      .finally(() => {
+        if (active) setAutostartLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  const changeAutostart = async (enabled: boolean) => {
+    setAutostartLoading(true);
+    try {
+      await bridge.setAutostart(enabled);
+      setAutostartEnabled(enabled);
+    } catch {
+      board.setError("开机自启动设置失败，请检查系统权限后重试。");
+    } finally {
+      setAutostartLoading(false);
+    }
+  };
   useEffect(() => {
     if (snapshot && isTauri())
       void getCurrentWindow()
@@ -561,6 +591,21 @@ export default function App() {
               <option value={600}>每 10 分钟</option>
             </select>
           </div>
+          <div className="autostart-setting">
+            <strong>开机自启动</strong>
+            <label className="setting-switch">
+              <input
+                aria-label="开机自启动"
+                type="checkbox"
+                role="switch"
+                checked={autostartEnabled}
+                disabled={autostartLoading}
+                onChange={(event) => void changeAutostart(event.target.checked)}
+              />
+              <span aria-hidden="true" />
+            </label>
+          </div>
+          <p className="autostart-hint">登录 Windows 或 macOS 后自动打开轻列便签。</p>
           <p>固定到今天仅影响本机，不改飞书截止日期。</p>
           <button
             className="text-button"

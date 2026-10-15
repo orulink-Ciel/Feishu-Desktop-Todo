@@ -43,6 +43,8 @@ export interface LoginLink {
 }
 export interface Bridge {
   preview: boolean;
+  autostartEnabled(): Promise<boolean>;
+  setAutostart(enabled: boolean): Promise<void>;
   duty(refresh: boolean): Promise<DutySnapshot>;
   openDuty(
     document: boolean,

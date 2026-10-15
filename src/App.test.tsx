@@ -71,6 +71,14 @@ it("closes settings when clicking outside the settings card", () => {
   fireEvent.pointerDown(document.body);
   expect(screen.queryByText("自动同步")).toBeNull();
 });
+it("lets the user toggle autostart from settings", async () => {
+  const autostart = vi.spyOn(bridge, "setAutostart").mockResolvedValue();
+  show(connected);
+  fireEvent.click(screen.getByRole("button", { name: "设置" }));
+  const toggle = await screen.findByRole("switch", { name: "开机自启动" });
+  fireEvent.click(toggle);
+  expect(autostart).toHaveBeenCalledWith(true);
+});
 it("opens the weekly calendar as a separate page", () => {
   show(connected);
   fireEvent.click(screen.getByRole("button", { name: /周历/ }));

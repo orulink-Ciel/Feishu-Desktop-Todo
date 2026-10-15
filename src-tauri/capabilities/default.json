@@ -10,6 +10,7 @@
     "core:window:allow-close",
     "core:window:allow-set-always-on-top",
     "updater:default",
+    "autostart:default",
     "process:allow-restart"
   ]
 }

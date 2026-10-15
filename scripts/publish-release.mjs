@@ -12,7 +12,7 @@ const api = path => JSON.parse(execFileSync('gh', ['api', `repos/${repo}/${path}
 // The get-by-tag endpoint omits drafts. Authenticated release listing includes them.
 const findRelease = tagName => api('releases?per_page=100').find(r => r.tag_name === tagName);
 const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
-const notes = '新增独立周历页面，按日期查看一周任务截止安排；更新三套主题视觉与主题预览，并优化主题和设置卡片的自动收起交互。应用名称与图标同步更新。';
+const notes = '设置中新增开机自启动，可在 Windows 和 macOS 登录后自动打开轻列便签；自启动状态与系统保持同步。';
 const manifest = createManifest(dir, tag, notes);
 if (manifest.version !== version) throw new Error('Tag does not match source version.');
 // Never let an older completed workflow roll a newer update feed back.
@@ -35,7 +35,7 @@ if (!release) {
   // ID instead of immediately depending on that eventually consistent list.
   release = JSON.parse(execFileSync('gh', ['api', `repos/${repo}/releases`, '--method', 'POST', '--input', '-'], {
     encoding: 'utf8',
-    input: JSON.stringify({ tag_name: tag, target_commitish: commit, name: `轻列便签 ${tag}：周历与界面体验优化`, body: readFileSync(notesFile, 'utf8'), draft: true, prerelease: true, make_latest: 'false' }),
+    input: JSON.stringify({ tag_name: tag, target_commitish: commit, name: `轻列便签 ${tag}：开机自启动`, body: readFileSync(notesFile, 'utf8'), draft: true, prerelease: true, make_latest: 'false' }),
   }));
 }
 if (!release) throw new Error('Unable to read back the created draft release.');
