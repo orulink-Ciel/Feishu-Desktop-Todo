@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { dateKey, dueDate, partitionTasks, retryDelay } from "./tasks";
+import {
+  dateKey,
+  dueDate,
+  partitionTasks,
+  retryDelay,
+  shiftDate,
+  weekdayLabel,
+  weekDateKeys,
+} from "./tasks";
 import type { Task } from "./types";
 const task = (
   guid: string,
@@ -83,5 +91,32 @@ describe("Asia/Shanghai task grouping", () => {
     expect(retryDelay(1, 300)).toBe(600_000);
     expect(retryDelay(0, 600)).toBe(600_000);
     expect(retryDelay(100, 300)).toBe(1_800_000);
+  });
+});
+describe("weekly calendar dates", () => {
+  it("builds Monday-to-Sunday weeks for midweek and Sunday anchors", () => {
+    expect(weekDateKeys("2026-10-13")).toEqual([
+      "2026-10-12",
+      "2026-10-13",
+      "2026-10-14",
+      "2026-10-15",
+      "2026-10-16",
+      "2026-10-17",
+      "2026-10-18",
+    ]);
+    expect(weekDateKeys("2026-10-18")[0]).toBe("2026-10-12");
+    expect(weekdayLabel("2026-10-13")).toBe("周二");
+  });
+  it("shifts dates across month and year boundaries", () => {
+    expect(shiftDate("2026-12-31", 1)).toBe("2027-01-01");
+    expect(weekDateKeys("2027-01-01")).toEqual([
+      "2026-12-28",
+      "2026-12-29",
+      "2026-12-30",
+      "2026-12-31",
+      "2027-01-01",
+      "2027-01-02",
+      "2027-01-03",
+    ]);
   });
 });

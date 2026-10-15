@@ -5,6 +5,10 @@ use std::time::Duration;
 
 include!(concat!(env!("OUT_DIR"), "/duty_config.rs"));
 
+pub fn configured() -> bool {
+    !BASE.is_empty() && BASE != "YOUR_BASE_TOKEN"
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DutyPayload {
     pub roster: Vec<Value>,

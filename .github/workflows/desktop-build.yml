@@ -1,0 +1,183 @@
+name: Desktop preview packages
+
+on:
+  push:
+    branches: [main, 'release/**']
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: '全部验证通过后发布试用版并更新自动更新入口'
+        type: boolean
+        default: false
+      release_tag:
+        description: '试用版本标签（须与源码版本一致）'
+        type: string
+        default: 'v0.1.5-preview.1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            channel: generic
+          - name: Windows company x64
+            runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            channel: internal
+          - name: macOS Apple Silicon
+            runner: macos-15
+            target: aarch64-apple-darwin
+            channel: generic
+          - name: macOS Intel
+            runner: macos-15-intel
+            target: x86_64-apple-darwin
+            channel: generic
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      FEISHU_TODO_PUBLIC_BUILD: ${{ matrix.channel == 'internal' && '0' || '1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.target }}
+      - run: npm ci
+      - name: Restore company duty resource mapping
+        if: matrix.channel == 'internal'
+        shell: pwsh
+        env:
+          DUTY_CONFIG: ${{ secrets.FEISHU_TODO_DUTY_CONFIG }}
+        run: |
+          if (!$env:DUTY_CONFIG) { throw 'Missing company duty configuration secret.' }
+          Set-Content -Encoding utf8 -LiteralPath src-tauri/duty-config.local.rs -Value $env:DUTY_CONFIG
+      - run: npm run prepare:cli
+      - run: npm test
+      - run: node --test scripts/update-manifest.check.mjs
+      - run: npm run build
+      - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
+      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }} --all-targets -- -D warnings
+      - name: Build signed installer and update archive
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri -- build --target ${{ matrix.target }}
+      - run: npm run collect:release -- ${{ matrix.target }}
+      - name: Check installed Windows runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $packageDir = if ('${{ matrix.channel }}' -eq 'internal') { 'release/internal-${{ matrix.target }}' } else { 'release/${{ matrix.target }}' }
+          $installer = Get-ChildItem -LiteralPath $packageDir -Filter '*-setup.exe' | Select-Object -First 1
+          $installedDir = Join-Path $env:RUNNER_TEMP 'FeishuTodoPreview'
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList '/S', "/D=$installedDir" -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
+          $env:FEISHU_TODO_CLI = Join-Path $env:RUNNER_TEMP 'nonexistent-cli.exe'
+          $result = & (Join-Path $installedDir 'feishu-desktop-todo.exe') --check-runtime | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or !$result.ok -or $result.dutyConfigured -ne ('${{ matrix.channel }}' -eq 'internal')) { throw 'Installed runtime check failed.' }
+          $result | ConvertTo-Json | Set-Content "$packageDir/${{ matrix.channel }}-installed-runtime.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.channel }}-${{ matrix.target }}
+          path: release/${{ matrix.channel == 'internal' && 'internal-' || '' }}${{ matrix.target }}/
+          if-no-files-found: error
+          retention-days: 14
+  publish:
+    name: Publish verified preview and updater feed
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: desktop-update-publication
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release/upload
+      - name: Publish all platforms before advertising the update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: node scripts/publish-release.mjs release/upload "$RELEASE_TAG" "$GITHUB_SHA"
+  verify-published:
+    name: Verify published update (${{ matrix.channel }}, ${{ matrix.target }})
+    needs: publish
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            channel: generic
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            channel: internal
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            channel: generic
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            channel: generic
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-${{ matrix.channel }}-${{ matrix.target }}
+          path: release/verify
+      - name: Verify live Windows update signature without installing an update
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem -LiteralPath release/verify -Filter '*-setup.exe' | Select-Object -First 1
+          $installedDir = Join-Path $env:RUNNER_TEMP 'FeishuUpdateVerification'
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList '/S', "/D=$installedDir" -Wait -PassThru -WindowStyle Hidden
+          if ($process.ExitCode -ne 0) { throw 'Installer failed.' }
+          $result = & (Join-Path $installedDir 'feishu-desktop-todo.exe') --check-update | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or !$result.ok -or !$result.signatureVerified -or $result.installed) { throw 'Published update signature check failed.' }
+          $result | ConvertTo-Json | Set-Content release/verify/update-check.json
+      - name: Verify live macOS update signature without installing an update
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          archive=$(find release/verify -name '*.app.tar.gz' -print -quit)
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          app=$(find "$RUNNER_TEMP" -maxdepth 1 -name '*.app' -print -quit)
+          "$app/Contents/MacOS/feishu-desktop-todo" --check-update > release/verify/update-check.json
+          python3 -c 'import json; d=json.load(open("release/verify/update-check.json")); assert d["ok"] and d["signatureVerified"] and not d["installed"], d'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: update-check-${{ matrix.channel }}-${{ matrix.target }}
+          path: release/verify/update-check.json
+          if-no-files-found: error
+          retention-days: 14

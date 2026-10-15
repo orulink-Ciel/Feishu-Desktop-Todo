@@ -11,6 +11,28 @@ export function dateKey(timestamp = Date.now()): string {
     .map((type) => parts.find((p) => p.type === type)?.value)
     .join("-");
 }
+export function shiftDate(date: string, amount: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const shifted = new Date(Date.UTC(year, month - 1, day + amount));
+  return [
+    shifted.getUTCFullYear(),
+    String(shifted.getUTCMonth() + 1).padStart(2, "0"),
+    String(shifted.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
+export function weekDateKeys(anchor: string): string[] {
+  const [year, month, day] = anchor.split("-").map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  const mondayOffset = (weekday + 6) % 7;
+  const monday = shiftDate(anchor, -mondayOffset);
+  return Array.from({ length: 7 }, (_, index) => shiftDate(monday, index));
+}
+export function weekdayLabel(date: string): string {
+  return new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "UTC",
+    weekday: "short",
+  }).format(new Date(`${date}T00:00:00Z`));
+}
 export function dueDate(task: Task): string | null {
   if (task.dueAt === null) return null;
   // Feishu all-day values use the calendar date encoded at UTC midnight.
