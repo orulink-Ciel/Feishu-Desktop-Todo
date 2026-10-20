@@ -32,6 +32,11 @@ pub trait Cli: Send + Sync {
 pub struct NativeCli {
     pub path: Option<PathBuf>,
 }
+pub const CLI_FILENAME: &str = if cfg!(windows) {
+    "lark-cli.exe"
+} else {
+    "lark-cli"
+};
 impl NativeCli {
     pub fn discover(resource_dir: Option<PathBuf>) -> Self {
         let mut candidates = vec![];
@@ -39,16 +44,23 @@ impl NativeCli {
             candidates.push(PathBuf::from(path));
         }
         if let Some(dir) = resource_dir {
-            candidates.push(dir.join("resources").join("lark-cli.exe"));
+            candidates.push(dir.join("resources").join(CLI_FILENAME));
         }
         if let Some(roaming) = std::env::var_os("APPDATA") {
             candidates.push(
-                PathBuf::from(roaming).join("npm/node_modules/@larksuite/cli/bin/lark-cli.exe"),
+                PathBuf::from(roaming)
+                    .join("npm/node_modules/@larksuite/cli/bin")
+                    .join(CLI_FILENAME),
             );
         }
+        candidates.push(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("resources")
+                .join(CLI_FILENAME),
+        );
         if let Some(paths) = std::env::var_os("PATH") {
             for dir in std::env::split_paths(&paths) {
-                candidates.push(dir.join("lark-cli.exe"));
+                candidates.push(dir.join(CLI_FILENAME));
             }
         }
         Self {
@@ -527,20 +539,27 @@ impl Service {
             .split_whitespace()
             .collect();
         let available = user["available"].as_bool().unwrap_or(false);
+        let authenticated = available && id.is_some();
         let can_read = scopes.contains("task:task:read") || scopes.contains("task:task:write");
         let can_write = scopes.contains("task:task:write");
         self.auth = Auth {
-            state: if available && id.is_some() && can_read {
+            state: if authenticated && can_read {
                 "ready"
             } else {
                 "needs_auth"
             }
             .into(),
-            user_id: id,
-            user_name: user["userName"].as_str().map(String::from),
-            can_read: available && can_read,
-            can_write: available && can_write,
-            message: if !available {
+            // CLI status may retain account metadata after authorization expires.
+            // Only a currently available identity can select its cache or UI name.
+            user_id: id.filter(|_| authenticated),
+            user_name: if authenticated {
+                user["userName"].as_str().map(String::from)
+            } else {
+                None
+            },
+            can_read: authenticated && can_read,
+            can_write: authenticated && can_write,
+            message: if !authenticated {
                 "请登录并授权飞书任务。"
             } else if !can_read {
                 "当前账号尚未授权任务读取，请连接飞书。"
@@ -767,6 +786,22 @@ impl Service {
         self.snapshot()
     }
     pub fn duty_snapshot(&mut self, refresh: bool) -> Result<crate::duty::DutySnapshot> {
+        self.duty_snapshot_from_source(refresh, crate::duty::configured())
+    }
+    fn duty_snapshot_from_source(
+        &mut self,
+        refresh: bool,
+        configured: bool,
+    ) -> Result<crate::duty::DutySnapshot> {
+        if !configured {
+            return Ok(crate::duty::DutySnapshot {
+                account_id: None,
+                payload: None,
+                last_synced_at: None,
+                error: Some("未配置公司值日来源，请联系管理员。".into()),
+                cached: false,
+            });
+        }
         self.bootstrap()?;
         let Some(account) = self.auth.user_id.clone() else {
             return Ok(crate::duty::DutySnapshot {
@@ -811,15 +846,13 @@ impl Service {
         })
     }
     pub fn begin_login(&mut self) -> Result<LoginLink> {
+        let scopes = if crate::duty::configured() {
+            "task:task:read task:task:write base:record:read"
+        } else {
+            "task:task:read task:task:write"
+        };
         let result = self.cli.call(
-            &[
-                "auth",
-                "login",
-                "--scope",
-                "task:task:read task:task:write base:record:read",
-                "--no-wait",
-                "--json",
-            ],
+            &["auth", "login", "--scope", scopes, "--no-wait", "--json"],
             Duration::from_secs(30),
         )?;
         let code = result["device_code"]

@@ -11,14 +11,14 @@ import { DutyCard } from "./DutyCard";
 import { previewBridge } from "./bridge";
 import type { DutySnapshot } from "./types";
 afterEach(cleanup);
-it("previews holiday/leave results and opens explicit administrator tables", async () => {
+  it("previews explicit weekly assignments and opens the shared schedule table", async () => {
   const api = previewBridge();
   const snapshot = structuredClone(state);
-  snapshot.payload!.leave = [
+  snapshot.payload!.exceptions = [
     {
-      person: [{ id: "ou_B", name: "乙" }],
-      startDate: "2026-10-12",
-      endDate: "2026-10-12",
+      date: "2026-10-12",
+      kind: "值日",
+      people: [{ id: "ou_B", name: "乙" }],
     },
   ];
   api.duty = vi.fn(async () => snapshot);
@@ -32,14 +32,12 @@ it("previews holiday/leave results and opens explicit administrator tables", asy
       refreshKey={0}
     />,
   );
-  await screen.findByText("需要管理员安排代班");
-  fireEvent.click(screen.getByRole("button", { name: "排班与调整" }));
+  await screen.findByText("乙");
+  fireEvent.click(screen.getByRole("button", { name: "周排班" }));
   expect(screen.getByRole("table", { name: "值日排班预览" })).toBeTruthy();
-  expect(screen.getAllByText("需要管理员安排代班")).toHaveLength(2);
-  fireEvent.click(screen.getByRole("button", { name: "登记请假" }));
-  expect(api.openDuty).toHaveBeenCalledWith(false, "leave");
-  fireEvent.click(screen.getByRole("button", { name: "调班与休息" }));
-  expect(api.openDuty).toHaveBeenCalledWith(false, "exceptions");
+  expect(screen.getAllByText("待排班")).toHaveLength(6);
+  fireEvent.click(screen.getByRole("button", { name: "打开排班表" }));
+  expect(api.openDuty).toHaveBeenCalledWith(false, "schedule");
 });
 const state: DutySnapshot = {
   accountId: "a",
@@ -56,7 +54,11 @@ const state: DutySnapshot = {
       { person: [{ id: "ou_A", name: "甲" }], order: 1, included: true },
       { person: [{ id: "ou_B", name: "乙" }], order: 2, included: true },
     ],
-    exceptions: [],
+    exceptions: [
+      { date: "2026-10-10", kind: "值日", people: [{ id: "ou_A", name: "甲" }] },
+      { date: "2026-10-11", kind: "休息", people: [] },
+      { date: "2026-10-12", kind: "值日", people: [{ id: "ou_B", name: "乙" }] },
+    ],
     leave: [],
     calendar: [{ date: "2026-01-01", kind: "年度已核验" }],
   },
@@ -64,7 +66,7 @@ const state: DutySnapshot = {
   cached: false,
   lastSyncedAt: 1791597600000,
 };
-it("recalculates a cached roster at midnight and labels stale data", async () => {
+it("shows the cached manual assignment and off day without calculating a roster", async () => {
   const api = previewBridge();
   api.duty = vi.fn(async () => ({ ...state, cached: true, error: "offline" }));
   const props = { api, accountId: "a", interval: 300, refreshKey: 0 };
@@ -72,7 +74,7 @@ it("recalculates a cached roster at midnight and labels stale data", async () =>
   await screen.findByText("甲");
   expect(screen.getByText("缓存")).toBeTruthy();
   rerender(<DutyCard {...props} date="2026-10-11" />);
-  await screen.findByText("今日无需值日");
+  await screen.findByText("休息");
   expect(screen.queryByText("甲")).toBeNull();
   rerender(<DutyCard {...props} date="2026-10-12" />);
   await screen.findByText("乙");

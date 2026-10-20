@@ -43,10 +43,12 @@ export interface LoginLink {
 }
 export interface Bridge {
   preview: boolean;
+  autostartEnabled(): Promise<boolean>;
+  setAutostart(enabled: boolean): Promise<void>;
   duty(refresh: boolean): Promise<DutySnapshot>;
   openDuty(
     document: boolean,
-    table?: "exceptions" | "leave" | "calendar",
+    table?: "schedule",
   ): Promise<void>;
   snapshot(): Promise<Snapshot>;
   refresh(): Promise<Snapshot>;
@@ -62,6 +64,7 @@ export interface DutyPayload {
   roster: Record<string, unknown>[];
   rules: Record<string, unknown>[];
   exceptions: Record<string, unknown>[];
+  weekly?: Record<string, unknown>[];
   calendar: Record<string, unknown>[];
   leave: Record<string, unknown>[];
 }

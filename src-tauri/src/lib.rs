@@ -1,10 +1,33 @@
 mod core;
+#[allow(dead_code)]
 mod duty;
 use core::{
     client_task_url, AppError, LoginLink, NativeCli, Preferences, Service, Snapshot, Store,
 };
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
+use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_window_state::AppHandleExt;
+
+fn update_target() -> String {
+    let os = if cfg!(target_os = "macos") {
+        "darwin"
+    } else {
+        std::env::consts::OS
+    };
+    let channel = if duty::configured() { "-internal" } else { "" };
+    format!("{os}{channel}-{}", std::env::consts::ARCH)
+}
+
+#[tauri::command]
+fn prepare_update(app: tauri::AppHandle) -> Result<(), String> {
+    app.save_window_state(
+        tauri_plugin_window_state::StateFlags::POSITION
+            | tauri_plugin_window_state::StateFlags::SIZE
+            | tauri_plugin_window_state::StateFlags::VISIBLE,
+    )
+    .map_err(|_| "无法保存窗口位置，请重试更新。".to_owned())
+}
 type Shared = Arc<Mutex<Service>>;
 async fn execute<T: Send + 'static>(
     state: tauri::State<'_, Shared>,
@@ -37,14 +60,15 @@ async fn get_duty(
 }
 #[tauri::command]
 async fn open_duty_url(document: bool, table: Option<String>) -> Result<(), AppError> {
+    if !duty::configured() {
+        return Err(AppError::new("setup", "未配置公司值日来源，请联系管理员。"));
+    }
     let url = if document {
         duty::DOC_URL.to_owned()
     } else {
         let id = match table.as_deref() {
             None => None,
-            Some("exceptions") => Some(duty::TABLE_EXCEPTIONS),
-            Some("leave") => Some(duty::TABLE_LEAVE),
-            Some("calendar") => Some(duty::TABLE_CALENDAR),
+            Some("schedule") => Some(duty::TABLE_SCHEDULE),
             _ => return Err(AppError::new("open", "值日入口无效。")),
         };
         id.map_or_else(
@@ -116,7 +140,36 @@ async fn open_auth_url(
     .await
 }
 
+fn app_context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
+}
+
 pub fn run() {
+    if std::env::args().any(|a| a == "--check-update") {
+        check_published_update();
+        return;
+    }
+    if std::env::args().any(|a| a == "--check-runtime") {
+        let result = check_bundled_runtime();
+        match result {
+            Ok(version) => println!(
+                "{}",
+                serde_json::json!({
+                    "ok": true, "platform": std::env::consts::OS,
+                    "arch": std::env::consts::ARCH, "cliVersion": version,
+                    "dutyConfigured": duty::configured(), "updateTarget": update_target()
+                })
+            ),
+            Err(error) => {
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"ok": false, "error": error.to_string()})
+                );
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     if std::env::args().any(|a| a == "--diagnose") {
         let result = (|| -> Result<(Snapshot, duty::DutySnapshot), AppError> {
             let cli = Arc::new(NativeCli::discover(None));
@@ -140,7 +193,7 @@ pub fn run() {
         }
         return;
     }
-    let context = tauri::generate_context!();
+    let context = app_context();
     #[cfg(debug_assertions)]
     let context = {
         let mut context = context;
@@ -153,6 +206,16 @@ pub fn run() {
         context
     };
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .target(update_target())
+                .build(),
+        )
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None::<Vec<&str>>,
+        ))
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
@@ -189,10 +252,84 @@ pub fn run() {
             open_task_url,
             open_auth_url,
             get_duty,
-            open_duty_url
+            open_duty_url,
+            prepare_update
         ])
         .run(context)
         .expect("Unable to start Feishu desktop widget");
+}
+fn check_published_update() {
+    // Diagnostics download and verify the published package, but never install or open user data.
+    let mut context = app_context();
+    context.config_mut().app.windows.clear();
+    tauri::Builder::default()
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .target(update_target())
+                .build(),
+        )
+        .setup(|app| {
+            let app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let result = async {
+                    let update = app
+                        .updater_builder()
+                        .timeout(std::time::Duration::from_secs(120))
+                        // Inspect the currently advertised package even when it is our own version.
+                        .version_comparator(|_, _| true)
+                        .build()?
+                        .check()
+                        .await?
+                        .ok_or("The feed did not contain a package")?;
+                    let bytes = update.download(|_, _| {}, || {}).await?;
+                    Ok::<_, Box<dyn std::error::Error>>(serde_json::json!({
+                        "ok": true, "updateTarget": update_target(), "version": update.version,
+                        "signatureVerified": true, "downloadBytes": bytes.len(), "installed": false
+                    }))
+                }
+                .await;
+                let (value, code) = match result {
+                    Ok(value) => (value, 0),
+                    Err(error) => (
+                        serde_json::json!({ "ok": false, "error": error.to_string() }),
+                        1,
+                    ),
+                };
+                println!("{value}");
+                app.exit(code);
+            });
+            Ok(())
+        })
+        .run(context)
+        .expect("Unable to verify published update");
+}
+fn check_bundled_runtime() -> Result<String, Box<dyn std::error::Error>> {
+    // Use only shipped resources: PATH, developer overrides and OAuth are irrelevant to this check.
+    let exe = std::env::current_exe()?;
+    let dir = exe.parent().ok_or("Missing executable directory")?;
+    let resources = if cfg!(target_os = "macos") {
+        dir.parent()
+            .ok_or("Missing app Contents directory")?
+            .join("Resources")
+    } else {
+        dir.to_path_buf()
+    };
+    let binary = resources.join("resources").join(core::CLI_FILENAME);
+    if !resources.join("resources/LARK-CLI-LICENSE").is_file() {
+        return Err("Missing embedded CLI license".into());
+    }
+    let mut command = std::process::Command::new(binary);
+    command.arg("--version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x08000000);
+    }
+    let output = command.output()?;
+    if !output.status.success() {
+        return Err("Embedded CLI could not start".into());
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 fn tempfile_dir() -> Result<std::path::PathBuf, AppError> {
     let dir = std::env::temp_dir().join("feishu-desktop-todo-diagnostics");

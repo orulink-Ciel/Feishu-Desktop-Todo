@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Check, X } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Check, Layers2, NotebookPen, Route, Sunrise, X } from "lucide-react";
 import { themes, type ThemeId } from "./themes";
 
 export function Appearance({
@@ -59,31 +59,24 @@ export function Appearance({
               className="theme-option"
               aria-label={`主题：${option.name}`}
               aria-pressed={theme === option.id}
-              onClick={() => selectTheme(option.id)}
+              onClick={() => {
+                selectTheme(option.id);
+                onClose();
+              }}
             >
-              <span
-                className="theme-preview"
-                data-theme={option.id}
-                aria-hidden="true"
-              >
-                <span className="preview-heading">
-                  <span />
-                  <i>03</i>
-                </span>
-                <span className="preview-row">
-                  <i />
-                  <span />
-                </span>
-                <span className="preview-row">
-                  <i />
-                  <span />
-                </span>
+              <span className="theme-preview" data-theme={option.id} aria-hidden="true">
+                <span className="preview-topline"><span className="preview-symbol">{option.mark === "sunrise" ? <Sunrise /> : option.mark === "calendar" ? <CalendarDays /> : <Layers2 />}</span><i>周历</i><span className="preview-dot" /></span>
+                <span className="preview-date-strip"><b>12</b><i>13</i><i>14</i><i>15</i><i>16</i></span>
+                <span className="preview-task"><span className="preview-check" /><span /><b /></span>
+                <span className="preview-task short"><span className="preview-check" /><span /><b /></span>
+                <span className="preview-motif">{option.mark === "sunrise" ? <NotebookPen /> : option.mark === "calendar" ? <Route /> : <ArrowUpRight />}</span>
               </span>
               <span className="theme-name">
                 {option.name}
                 {theme === option.id && <Check size={13} />}
               </span>
               <span className="theme-description">{option.description}</span>
+              <span className="theme-mood">{option.mood}</span>
             </button>
           ))}
         </div>

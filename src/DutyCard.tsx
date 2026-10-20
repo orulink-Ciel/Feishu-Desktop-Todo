@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUpRight, RefreshCw, Users } from "lucide-react";
 import type { Bridge, DutySnapshot } from "./types";
-import { dayNumber, dutyForDate } from "./duty";
+import { dayNumber, manualDutyForDate } from "./duty";
 import { errorMessage, retryDelay } from "./tasks";
 
 export function DutyCard({
@@ -124,7 +124,7 @@ export function DutyCard({
     };
   }, [accountId, interval, refresh]);
   const current = snapshot?.accountId === accountId ? snapshot : null;
-  const result = dutyForDate(current?.payload ?? null, date);
+  const result = manualDutyForDate(current?.payload ?? null, date);
   const cached = !!current?.payload && (current.cached || !!error);
   const title = !accountId
     ? "连接飞书后查看值日"
@@ -167,10 +167,13 @@ export function DutyCard({
             </p>
           ) : (
             result.state === "unconfigured" &&
-            accountId && <p>管理员填好名单和规则后启用。</p>
+            accountId && <p>管理员在飞书表中填写周排班后即可查看。</p>
+          )}
+          {result.state === "unplanned" && current?.payload && (
+            <p>管理员每周在飞书填写排班后，刷新即可查看。</p>
           )}
           {cached && syncTime && (
-            <p>上次成功同步：{syncTime} · 按今日规则计算</p>
+            <p>上次成功同步：{syncTime} · 按飞书手工安排显示</p>
           )}
         </div>
         <button
@@ -189,7 +192,7 @@ export function DutyCard({
           aria-controls="duty-preview"
           onClick={() => setPreviewOpen(!previewOpen)}
         >
-          排班与调整
+          周排班
         </button>
         <button
           onClick={() =>
@@ -203,11 +206,11 @@ export function DutyCard({
         <button
           onClick={() =>
             void api
-              .openDuty(false)
+              .openDuty(false, "schedule")
               .catch((e) => setError(errorMessage(e).message))
           }
         >
-          名单与规则 <ArrowUpRight size={11} />
+          飞书排班表 <ArrowUpRight size={11} />
         </button>
       </div>
       {previewOpen && (
@@ -224,40 +227,21 @@ export function DutyCard({
             />
           </label>
           <p>
-            未来 14 天 ·
-            管理员在飞书修改，桌面刷新后更新。缓存预览以本次读取的配置为准。
+            一周一条记录 · 选择周一日期，填写每日值日人员，并标记休息日；桌面会按日期展开显示。
           </p>
           <div className="duty-links duty-manage-links">
             <button
               onClick={() =>
                 void api
-                  .openDuty(false, "exceptions")
+                  .openDuty(false, "schedule")
                   .catch((e) => setError(errorMessage(e).message))
               }
             >
-              调班与休息 <ArrowUpRight size={11} />
-            </button>
-            <button
-              onClick={() =>
-                void api
-                  .openDuty(false, "leave")
-                  .catch((e) => setError(errorMessage(e).message))
-              }
-            >
-              登记请假 <ArrowUpRight size={11} />
-            </button>
-            <button
-              onClick={() =>
-                void api
-                  .openDuty(false, "calendar")
-                  .catch((e) => setError(errorMessage(e).message))
-              }
-            >
-              节假日日历 <ArrowUpRight size={11} />
+              打开排班表 <ArrowUpRight size={11} />
             </button>
           </div>
           <p>
-            代班：填日期、类型“换人”和替班人员。互换：只需一条记录，填两个日期、类型“互换”，不填替班人员。请假起止日期均包含当天。
+            每周新增一条记录：填写周一起始日期，选择周一至周日值日人员；休息日统一在“休息日”字段勾选。未填写人员的工作日会显示“待填写”。
           </p>
           <table aria-label="值日排班预览">
             <thead>
@@ -267,11 +251,11 @@ export function DutyCard({
               </tr>
             </thead>
             <tbody>
-              {Array.from({ length: 14 }, (_, i) => {
+              {Array.from({ length: 7 }, (_, i) => {
                 const day = new Date((dayNumber(previewStart) + i) * 86400000)
                   .toISOString()
                   .slice(0, 10);
-                const planned = dutyForDate(current?.payload ?? null, day);
+                const planned = manualDutyForDate(current?.payload ?? null, day);
                 return (
                   <tr key={day}>
                     <td>
@@ -293,7 +277,9 @@ export function DutyCard({
                         ? planned.people.map((p) => p.name).join("、")
                         : planned.state === "rest"
                           ? "休息"
-                          : planned.message}
+                          : planned.state === "needsReplacement"
+                            ? planned.note ?? planned.message
+                            : planned.message}
                       {planned.note && <small>{planned.note}</small>}
                     </td>
                   </tr>

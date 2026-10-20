@@ -1,7 +1,7 @@
 {
   "name": "feishu-desktop-todo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.7",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -10,16 +10,24 @@
     "test": "vitest run",
     "tauri": "tauri",
     "desktop": "tauri dev",
-    "package": "tauri build --bundles nsis"
+    "prepare:cli": "node scripts/prepare-cli.mjs",
+    "icons": "node scripts/generate-icons.mjs",
+    "package": "npm run prepare:cli && tauri build",
+    "package:public": "npm run prepare:cli && node scripts/package-public.mjs",
+    "collect:release": "node scripts/collect-release.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.0",
+    "@tauri-apps/plugin-autostart": "^2.7.0",
+    "@tauri-apps/plugin-process": "^2.4.0",
+    "@tauri-apps/plugin-updater": "^2.13.3",
     "lucide-react": "^0.577.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@larksuite/cli": "1.0.76",
     "@playwright/test": "^1.64.0",
     "@tauri-apps/cli": "^2.10.0",
     "@testing-library/react": "^16.3.0",

@@ -199,6 +199,241 @@ ul {
   padding: 0 12px 0 24px;
   user-select: none;
 }
+.page-nav {
+  display: flex;
+  align-items: stretch;
+  gap: 25px;
+  height: 38px;
+  padding: 0 25px;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.page-nav button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.page-nav button.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+.page-nav button.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
+}
+.week-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0 18px 0 24px;
+}
+.week-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 17px 0 12px;
+  flex-shrink: 0;
+}
+.week-heading-copy {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--accent);
+}
+.week-heading-copy > svg {
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+}
+.week-heading-copy > div { min-width: 0; }
+.week-heading-copy h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.35px;
+}
+.week-heading-copy p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.week-navigation { display: flex; gap: 2px; }
+.week-navigation .icon-button { color: var(--secondary); }
+.week-day-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  padding: 3px 0 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--line);
+}
+.week-day-button {
+  min-width: 0;
+  height: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 4px 1px;
+  border-radius: 8px;
+  color: var(--secondary);
+}
+.week-day-button:hover { background: var(--hover); }
+.week-day-button.selected {
+  background: var(--strong-bg);
+  color: var(--strong-fg);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--shadow) 78%, transparent);
+  transform: translateY(-1px);
+}
+.week-day-label { font-size: 10px; }
+.week-day-button strong {
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 550;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.week-day-button.selected strong,
+.week-day-button.selected .week-day-count { color: var(--strong-fg); }
+.week-day-button.is-today:not(.selected) strong { text-decoration: underline; text-underline-offset: 3px; }
+.week-day-count {
+  min-height: 14px;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.week-overdue-summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  align-self: flex-start;
+  margin: 9px 0 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--warning);
+  background: var(--warning-bg, var(--panel));
+  font-size: 10px;
+}
+.week-overdue-summary strong { font-variant-numeric: tabular-nums; }
+.week-scroll {
+  flex: 1;
+  min-height: 0;
+  margin: 10px -7px 0 0;
+  padding: 0 7px 10px 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--control-border) transparent;
+}
+.week-group {
+  scroll-margin-top: 8px;
+  margin: 0 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--row);
+}
+.week-group.today-group {
+  border-color: color-mix(in srgb, var(--accent) 46%, var(--line));
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--shadow) 55%, transparent);
+}
+.week-group-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 38px;
+  padding: 8px 11px;
+  color: var(--secondary);
+  font-size: 11px;
+  background: var(--panel);
+}
+.today-group .week-group-heading {
+  background: var(--accent-soft);
+}
+.week-group-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.week-group-heading strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.week-today {
+  padding: 2px 5px;
+  border-radius: 4px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 9px;
+}
+.week-group-count { color: var(--muted); font-size: 10px; }
+.today-group .week-group-heading strong { color: var(--accent); }
+.week-group ul { padding: 0 11px; }
+.week-group ul .task {
+  padding: 12px 0;
+  border-color: var(--line);
+}
+.week-group ul .task-title { font-size: 13px; line-height: 1.55; }
+.week-group ul .task-meta { margin-top: 5px; }
+.week-empty-day {
+  margin: 0;
+  padding: 10px 12px 11px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.week-overdue-group {
+  margin-bottom: 10px;
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--line));
+}
+.week-overdue-group .week-group-heading { background: var(--warning-bg, var(--panel)); }
+.week-overdue-group .week-group-heading strong,
+.week-overdue-label { color: var(--warning); }
+.week-overdue-label {
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--warning-bg, var(--panel));
+  font-size: 9px;
+}
+.week-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 9px;
+  padding: 24px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.week-connect-state strong { color: var(--ink); font-weight: 600; }
+.week-connect-state span { line-height: 1.6; }
+.week-footnote {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 7px 0 9px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 9px;
+}
 .brand {
   font-size: 11px;
   font-weight: 500;
@@ -211,13 +446,18 @@ ul {
   height: 100%;
 }
 .brand-mark {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  background: var(--strong-bg);
-  color: var(--strong-fg);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+.brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .window-actions {
   display: flex;
@@ -680,6 +920,13 @@ h1 {
   z-index: 2;
 }
 .settings-panel {
+  position: absolute;
+  bottom: 46px;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  max-height: calc(100% - 100px);
+  overflow: auto;
   margin: 0 16px 12px;
   padding: 15px;
   border: 1px solid var(--line);
@@ -704,6 +951,61 @@ h1 {
   color: var(--secondary);
   background: var(--surface);
   font-size: 11px;
+}
+.settings-panel .autostart-setting {
+  margin-top: 12px;
+}
+.setting-switch {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 20px;
+  flex: 0 0 auto;
+  align-items: center;
+  cursor: pointer;
+}
+.setting-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+.setting-switch span {
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background 140ms ease;
+}
+.setting-switch span::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 3px #0002;
+  transition: transform 140ms ease;
+}
+.setting-switch input:checked + span {
+  background: var(--accent);
+}
+.setting-switch input:checked + span::after {
+  transform: translateX(14px);
+}
+.setting-switch input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.setting-switch input:disabled + span {
+  opacity: 0.55;
+  cursor: wait;
+}
+.settings-panel p.autostart-hint {
+  margin-top: 5px;
+  margin-bottom: 2px;
 }
 .settings-panel p {
   font-size: 10px;
@@ -805,6 +1107,39 @@ h1 {
 }
 .spin {
   animation: spin 1.1s linear infinite;
+}
+.update-settings {
+  flex-shrink: 0;
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+}
+.settings-panel > .update-settings-host { display: block; }
+.update-settings > div, .update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.update-settings p { color: var(--muted); line-height: 1.6; margin: 5px 0; }
+.update-banner {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  background: var(--panel);
+}
+.update-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: left;
+  max-height: 140px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.8;
+  margin: 12px 0 18px;
+  color: var(--secondary);
 }
 @keyframes spin {
   to {

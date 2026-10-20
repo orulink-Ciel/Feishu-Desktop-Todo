@@ -11,7 +11,8 @@ export interface DutyResult {
     | "unconfigured"
     | "future"
     | "invalid"
-    | "needsReplacement";
+    | "needsReplacement"
+    | "unplanned";
   message: string;
   people: DutyPerson[];
   note?: string;
@@ -58,7 +59,12 @@ function choice(value: unknown): string {
   if (Array.isArray(value) && value.length === 1) return choice(value[0]);
   if (value && typeof value === "object" && "name" in value)
     return choice(value.name);
-  return fail("请填写特殊安排类型");
+  return fail("请填写安排类型");
+}
+function choices(value: unknown): string[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value.map(choice);
+  return [choice(value)];
 }
 export function defaultWorkday(day: number, anchor: number): boolean {
   const weekday = new Date(day * dayMs).getUTCDay();
@@ -126,7 +132,14 @@ export function dutyForDate(
           r.order < 1
         )
           return fail("顺序必须是不重复的正整数");
-        return { ...persons[0], order: r.order };
+        const from =
+          r.startDate == null ? start : dayNumber(calendarDate(r.startDate));
+        const to =
+          r.endDate == null
+            ? Number.POSITIVE_INFINITY
+            : dayNumber(calendarDate(r.endDate));
+        if (from > to) return fail("参与结束日不能早于参与开始日");
+        return { ...persons[0], order: r.order, from, to };
       })
       .sort((a, b) => a.order - b.order);
     if (!members.length) return result("unconfigured", "值日名单尚未填写");
@@ -151,7 +164,8 @@ export function dutyForDate(
         const persons = people(row.person);
         if (persons.length !== 1)
           return fail("请假人员须是参与名单中的一位人员");
-        if (!members.some((m) => m.id === persons[0].id)) {
+        const member = members.find((m) => m.id === persons[0].id);
+        if (!member) {
           // Old leave records of a now-excluded member do not stop today's roster.
           if (
             payload.roster.some(
@@ -166,6 +180,8 @@ export function dutyForDate(
         const from = dayNumber(calendarDate(row.startDate));
         const to = dayNumber(calendarDate(row.endDate));
         if (from > to) return fail("请假结束日期不能早于开始日期");
+        if (from < member.from || to > member.to)
+          return fail("请假日期须在该人员参与值日的有效期内");
         return [{ id: persons[0].id, from, to }];
       });
     const absent = (day: number, id: string) =>
@@ -189,10 +205,10 @@ export function dutyForDate(
       )
         continue;
       const day = dayNumber(calendarDate(row.date));
-      if (occupied.has(day)) return fail("同一天有多条特殊安排或互换，请合并");
+      if (occupied.has(day)) return fail("同一天有多条值日调整或互换，请合并");
       const kind = choice(row.kind);
       if (!["休息", "补班", "换人", "互换"].includes(kind))
-        return fail("特殊安排类型无效");
+        return fail("值日调整类型无效");
       const assigned = people(row.people);
       if (kind === "互换") {
         const target = dayNumber(calendarDate(row.swapDate));
@@ -224,8 +240,13 @@ export function dutyForDate(
         return fail("换人时请选择替班人员");
       if (kind === "休息" && assigned.length)
         return fail("休息日不能同时填写替班人员");
-      if (assigned.some((p) => !members.some((m) => m.id === p.id)))
-        return fail("替班人员须在参与名单中");
+      const activeIds = new Set(
+        members
+          .filter((m) => m.from <= day && day <= m.to)
+          .map((m) => m.id),
+      );
+      if (assigned.some((p) => !activeIds.has(p.id)))
+        return fail("替班人员须在当日参与名单中");
       if (assigned.length && assigned.length !== count)
         return fail("替班人员数量应等于每天人数");
       if (kind === "换人" && !baseWorkday(day))
@@ -253,11 +274,26 @@ export function dutyForDate(
         [],
         exceptions.get(today)?.note ?? calendar.get(today)?.note,
       );
-    const queue = [...members];
+    const queue: typeof members = [];
     const assignments = new Map<number, DutyPerson[]>();
     const last = Math.max(today, ...swaps.flatMap((s) => [s.from, s.to]));
     for (let day = start; day <= last; day++) {
+      const activeMembers = members.filter(
+        (member) => member.from <= day && day <= member.to,
+      );
+      const activeIds = new Set(activeMembers.map((member) => member.id));
+      for (let i = queue.length - 1; i >= 0; i--) {
+        if (!activeIds.has(queue[i].id)) queue.splice(i, 1);
+      }
+      const queuedIds = new Set(queue.map((member) => member.id));
+      for (const member of activeMembers) {
+        if (!queuedIds.has(member.id)) queue.push(member);
+      }
       if (!workday(day)) continue;
+      if (queue.length < count)
+        return fail(
+          `${new Date(day * dayMs).toISOString().slice(0, 10)} 的参与人数少于每天值日人数`,
+        );
       const assigned: DutyPerson[] = [];
       if (policy === "手动代班") {
         const turns = queue.splice(0, count);
@@ -299,7 +335,7 @@ export function dutyForDate(
         "需要管理员安排代班",
         [],
         unavailable.length
-          ? `${unavailable.map((p) => p.name).join("、")}请假；请在“调班与休息”中指定当日完整的值日人员。`
+          ? `${unavailable.map((p) => p.name).join("、")}请假；请在“值日调整”中指定当日完整的值日人员。`
           : "可值日人数不足，请管理员调整请假或当日代班安排。",
       );
     // Reject a swap that silently sends an absent person to its other date.
@@ -324,6 +360,74 @@ export function dutyForDate(
     return result(
       "invalid",
       error instanceof Error ? error.message : "请检查值日配置",
+    );
+  }
+}
+
+/** Reads explicit per-date assignments from Feishu; never infers a rotation. */
+export function manualDutyForDate(
+  payload: DutyPayload | null,
+  date: string,
+): DutyResult {
+  const result = (
+    state: DutyResult["state"],
+    message: string,
+    people: DutyPerson[] = [],
+    note?: string,
+  ): DutyResult => ({ state, message, people, note });
+  try {
+    if (!payload) return result("unconfigured", "值日未配置");
+    const day = dayNumber(date);
+    const weekdayLabels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const validWeekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    const weeklyPlans = new Map<number, { kind: string; people: DutyPerson[]; note?: string }>();
+    for (const row of payload.weekly ?? []) {
+      if (row.weekStart == null) continue;
+      const start = dayNumber(calendarDate(row.weekStart));
+      if (new Date(start * dayMs).getUTCDay() !== 1)
+        return fail("周起始日期必须选择星期一");
+      const offset = day - start;
+      if (offset < 0 || offset > 6) continue;
+      const label = weekdayLabels[new Date(day * dayMs).getUTCDay()];
+      const restDays = choices(row.restDays);
+      if (restDays.some((restDay) => !validWeekdays.includes(restDay)))
+        return fail("休息日字段只能选择周一至周日");
+      const assigned = people(row[["monPeople", "tuePeople", "wedPeople", "thuPeople", "friPeople", "satPeople", "sunPeople"][offset]]);
+      const plan = restDays.includes(label)
+        ? { kind: "休息", people: assigned, note: typeof row.note === "string" ? row.note : undefined }
+        : { kind: "值日", people: assigned, note: typeof row.note === "string" ? row.note : undefined };
+      if (weeklyPlans.has(day)) return fail("同一周存在多条周排班记录");
+      weeklyPlans.set(day, plan);
+    }
+    const plans: { kind: string; people: DutyPerson[]; note?: string }[] = [];
+    for (const row of payload.exceptions ?? []) {
+      const kind = row.kind == null ? "" : choice(row.kind);
+      if (row.date == null) continue;
+      if (weeklyPlans.has(dayNumber(calendarDate(row.date)))) continue;
+      // Accept the former option name for stale local cache entries during upgrade.
+      if (kind !== "值日" && kind !== "换人" && kind !== "休息") continue;
+      if (dayNumber(calendarDate(row.date)) !== day) continue;
+      plans.push({
+        kind,
+        people: people(row.people),
+        note: typeof row.note === "string" ? row.note : undefined,
+      });
+    }
+    if (plans.length > 1) return fail("同一天有多条值日安排，请合并");
+    const plan = weeklyPlans.get(day) ?? plans[0];
+    if (!plan) return result("unplanned", "待排班");
+    if (plan.kind === "休息") {
+      if (plan.people.length) return fail("休息日不能填写值日人员");
+      return result("rest", "休息", [], plan.note);
+    }
+    if (!plan.people.length) return result("unplanned", "待填写值日人员", [], plan.note);
+    if (new Set(plan.people.map((person) => person.id)).size !== plan.people.length)
+      return fail("值日人员重复");
+    return result("ready", "今日值日", plan.people, plan.note);
+  } catch (error) {
+    return result(
+      "invalid",
+      error instanceof Error ? error.message : "请检查值日安排",
     );
   }
 }

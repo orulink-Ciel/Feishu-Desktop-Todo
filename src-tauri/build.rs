@@ -5,7 +5,13 @@ fn main() {
     let example = std::path::Path::new("duty-config.example.rs");
     println!("cargo:rerun-if-changed={}", local.display());
     println!("cargo:rerun-if-changed={}", example.display());
-    let source = if local.exists() { local } else { example };
+    println!("cargo:rerun-if-env-changed=FEISHU_TODO_PUBLIC_BUILD");
+    let public = std::env::var("FEISHU_TODO_PUBLIC_BUILD").is_ok_and(|v| v == "1");
+    let source = if !public && local.exists() {
+        local
+    } else {
+        example
+    };
     let output = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     std::fs::copy(source, output.join("duty_config.rs"))
         .expect("Unable to prepare duty configuration");

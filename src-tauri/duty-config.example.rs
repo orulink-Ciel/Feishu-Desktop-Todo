@@ -2,28 +2,19 @@
 pub const BASE: &str = "YOUR_BASE_TOKEN";
 pub const DOC_URL: &str = "https://example.feishu.cn/docx/YOUR_DOCUMENT_TOKEN";
 pub const BASE_URL: &str = "https://example.feishu.cn/base/YOUR_BASE_TOKEN";
-pub const TABLE_RULES: &str = "tbl_table_rules";
-pub const TABLE_ROSTER: &str = "tbl_table_roster";
-pub const TABLE_EXCEPTIONS: &str = "tbl_table_exceptions";
-pub const TABLE_CALENDAR: &str = "tbl_table_calendar";
-pub const TABLE_LEAVE: &str = "tbl_table_leave";
-pub const RULE_START_DATE: &str = "fld_rule_start_date";
-pub const RULE_DAILY_COUNT: &str = "fld_rule_daily_count";
-pub const RULE_WEEK_ANCHOR: &str = "fld_rule_week_anchor";
-pub const RULE_ENABLED: &str = "fld_rule_enabled";
-pub const RULE_LEAVE_POLICY: &str = "fld_rule_leave_policy";
-pub const ROSTER_PERSON: &str = "fld_roster_person";
-pub const ROSTER_ORDER: &str = "fld_roster_order";
-pub const ROSTER_INCLUDED: &str = "fld_roster_included";
-pub const EXCEPTION_DATE: &str = "fld_exception_date";
-pub const EXCEPTION_KIND: &str = "fld_exception_kind";
-pub const EXCEPTION_PEOPLE: &str = "fld_exception_people";
-pub const EXCEPTION_NOTE: &str = "fld_exception_note";
-pub const EXCEPTION_SWAP_DATE: &str = "fld_exception_swap_date";
-pub const CALENDAR_DATE: &str = "fld_calendar_date";
-pub const CALENDAR_KIND: &str = "fld_calendar_kind";
-pub const CALENDAR_NOTE: &str = "fld_calendar_note";
-pub const LEAVE_PERSON: &str = "fld_leave_person";
-pub const LEAVE_START_DATE: &str = "fld_leave_start_date";
-pub const LEAVE_END_DATE: &str = "fld_leave_end_date";
-pub const LEAVE_NOTE: &str = "fld_leave_note";
+pub const TABLE_SCHEDULE: &str = "tbl_weekly_duty_schedule";
+pub const SCHEDULE_DATE: &str = "fld_schedule_date";
+pub const SCHEDULE_KIND: &str = "fld_schedule_kind";
+pub const SCHEDULE_PEOPLE: &str = "fld_schedule_people";
+pub const SCHEDULE_NOTE: &str = "fld_schedule_note";
+pub const SCHEDULE_WEEK_START: &str = "fld_schedule_week_start";
+pub const SCHEDULE_REST_DAYS: &str = "fld_schedule_rest_days";
+pub const SCHEDULE_WEEK_PEOPLE: &[&str] = &[
+    "fld_schedule_mon_people",
+    "fld_schedule_tue_people",
+    "fld_schedule_wed_people",
+    "fld_schedule_thu_people",
+    "fld_schedule_fri_people",
+    "fld_schedule_sat_people",
+    "fld_schedule_sun_people",
+];
