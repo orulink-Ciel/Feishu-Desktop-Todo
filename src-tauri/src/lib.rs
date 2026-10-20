@@ -67,8 +67,7 @@ async fn open_duty_url(document: bool, table: Option<String>) -> Result<(), AppE
     } else {
         let id = match table.as_deref() {
             None => None,
-            Some("exceptions") => Some(duty::TABLE_EXCEPTIONS),
-            Some("leave") => Some(duty::TABLE_LEAVE),
+            Some("adjustments" | "exceptions" | "leave") => Some(duty::TABLE_ADJUSTMENTS),
             Some("calendar") => Some(duty::TABLE_CALENDAR),
             _ => return Err(AppError::new("open", "值日入口无效。")),
         };

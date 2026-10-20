@@ -11,7 +11,7 @@ import { DutyCard } from "./DutyCard";
 import { previewBridge } from "./bridge";
 import type { DutySnapshot } from "./types";
 afterEach(cleanup);
-it("previews holiday/leave results and opens explicit administrator tables", async () => {
+it("previews holiday/leave results and opens one administrator adjustment table", async () => {
   const api = previewBridge();
   const snapshot = structuredClone(state);
   snapshot.payload!.leave = [
@@ -36,10 +36,8 @@ it("previews holiday/leave results and opens explicit administrator tables", asy
   fireEvent.click(screen.getByRole("button", { name: "排班与调整" }));
   expect(screen.getByRole("table", { name: "值日排班预览" })).toBeTruthy();
   expect(screen.getAllByText("需要管理员安排代班")).toHaveLength(2);
-  fireEvent.click(screen.getByRole("button", { name: "登记请假" }));
-  expect(api.openDuty).toHaveBeenCalledWith(false, "leave");
-  fireEvent.click(screen.getByRole("button", { name: "调班与休息" }));
-  expect(api.openDuty).toHaveBeenCalledWith(false, "exceptions");
+  fireEvent.click(screen.getByRole("button", { name: "请假与临时调整" }));
+  expect(api.openDuty).toHaveBeenCalledWith(false, "adjustments");
 });
 const state: DutySnapshot = {
   accountId: "a",

@@ -58,7 +58,7 @@ function choice(value: unknown): string {
   if (Array.isArray(value) && value.length === 1) return choice(value[0]);
   if (value && typeof value === "object" && "name" in value)
     return choice(value.name);
-  return fail("请填写特殊安排类型");
+  return fail("请填写值日调整类型");
 }
 export function defaultWorkday(day: number, anchor: number): boolean {
   const weekday = new Date(day * dayMs).getUTCDay();
@@ -189,10 +189,10 @@ export function dutyForDate(
       )
         continue;
       const day = dayNumber(calendarDate(row.date));
-      if (occupied.has(day)) return fail("同一天有多条特殊安排或互换，请合并");
+      if (occupied.has(day)) return fail("同一天有多条值日调整或互换，请合并");
       const kind = choice(row.kind);
       if (!["休息", "补班", "换人", "互换"].includes(kind))
-        return fail("特殊安排类型无效");
+        return fail("值日调整类型无效");
       const assigned = people(row.people);
       if (kind === "互换") {
         const target = dayNumber(calendarDate(row.swapDate));
@@ -299,7 +299,7 @@ export function dutyForDate(
         "需要管理员安排代班",
         [],
         unavailable.length
-          ? `${unavailable.map((p) => p.name).join("、")}请假；请在“调班与休息”中指定当日完整的值日人员。`
+          ? `${unavailable.map((p) => p.name).join("、")}请假；请在“值日调整”中指定当日完整的值日人员。`
           : "可值日人数不足，请管理员调整请假或当日代班安排。",
       );
     // Reject a swap that silently sends an absent person to its other date.

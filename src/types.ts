@@ -48,7 +48,7 @@ export interface Bridge {
   duty(refresh: boolean): Promise<DutySnapshot>;
   openDuty(
     document: boolean,
-    table?: "exceptions" | "leave" | "calendar",
+    table?: "adjustments" | "calendar",
   ): Promise<void>;
   snapshot(): Promise<Snapshot>;
   refresh(): Promise<Snapshot>;

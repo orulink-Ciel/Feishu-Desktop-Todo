@@ -13,7 +13,7 @@ on:
       release_tag:
         description: '试用版本标签（须与源码版本一致）'
         type: string
-        default: 'v0.1.5-preview.1'
+        default: 'v0.1.6-preview.1'
 
 permissions:
   contents: read

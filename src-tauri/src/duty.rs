@@ -108,6 +108,16 @@ const RULE_FIELDS: &[(&str, &str)] = &[
     (RULE_ENABLED, "enabled"),
     (RULE_LEAVE_POLICY, "leavePolicy"),
 ];
+const ADJUSTMENT_FIELDS: &[(&str, &str)] = &[
+    (ADJUSTMENT_DATE, "date"),
+    (ADJUSTMENT_KIND, "kind"),
+    (ADJUSTMENT_PEOPLE, "people"),
+    (ADJUSTMENT_NOTE, "note"),
+    (ADJUSTMENT_SWAP_DATE, "swapDate"),
+    (LEAVE_PERSON, "person"),
+    (LEAVE_START_DATE, "startDate"),
+    (LEAVE_END_DATE, "endDate"),
+];
 pub fn load(cli: &dyn Cli) -> Result<DutyPayload> {
     let (rules, before) = table(cli, TABLE_RULES, RULE_FIELDS)?;
     let (roster, _) = table(
@@ -119,17 +129,7 @@ pub fn load(cli: &dyn Cli) -> Result<DutyPayload> {
             (ROSTER_INCLUDED, "included"),
         ],
     )?;
-    let (exceptions, _) = table(
-        cli,
-        TABLE_EXCEPTIONS,
-        &[
-            (EXCEPTION_DATE, "date"),
-            (EXCEPTION_KIND, "kind"),
-            (EXCEPTION_PEOPLE, "people"),
-            (EXCEPTION_NOTE, "note"),
-            (EXCEPTION_SWAP_DATE, "swapDate"),
-        ],
-    )?;
+    let (adjustments, _) = table(cli, TABLE_ADJUSTMENTS, ADJUSTMENT_FIELDS)?;
     let (calendar, _) = table(
         cli,
         TABLE_CALENDAR,
@@ -139,16 +139,6 @@ pub fn load(cli: &dyn Cli) -> Result<DutyPayload> {
             (CALENDAR_NOTE, "note"),
         ],
     )?;
-    let (leave, _) = table(
-        cli,
-        TABLE_LEAVE,
-        &[
-            (LEAVE_PERSON, "person"),
-            (LEAVE_START_DATE, "startDate"),
-            (LEAVE_END_DATE, "endDate"),
-            (LEAVE_NOTE, "note"),
-        ],
-    )?;
     let (_, after) = table(cli, TABLE_RULES, RULE_FIELDS)?;
     if before != after {
         return Err(AppError::new("conflict", "值日规则正在修改，请稍后刷新。"));
@@ -156,9 +146,9 @@ pub fn load(cli: &dyn Cli) -> Result<DutyPayload> {
     Ok(DutyPayload {
         roster,
         rules,
-        exceptions,
+        exceptions: adjustments.clone(),
         calendar,
-        leave,
+        leave: adjustments,
     })
 }
 
@@ -182,6 +172,9 @@ mod tests {
     }
     fn page(cells: Value, more: bool, rev: u32) -> Value {
         json!({"data":{"field_id_list":["f1"],"data":cells,"has_more":more,"rev":rev}})
+    }
+    fn page_with_fields(fields: &[&str], rows: Value, rev: u32) -> Value {
+        json!({"data":{"field_id_list":fields,"data":rows,"has_more":false,"rev":rev}})
     }
     #[test]
     fn reads_complete_pages_and_uses_user_read_only_command() {
@@ -216,5 +209,43 @@ mod tests {
             };
             assert!(table(&mock, "test", &[("f1", "name")]).is_err());
         }
+    }
+    #[test]
+    fn loads_leave_and_schedule_changes_from_one_adjustment_table() {
+        let rule_fields: Vec<&str> = RULE_FIELDS.iter().map(|(field, _)| *field).collect();
+        let adjustment_fields: Vec<&str> =
+            ADJUSTMENT_FIELDS.iter().map(|(field, _)| *field).collect();
+        let mock = Mock {
+            pages: Mutex::new(vec![
+                page_with_fields(&rule_fields, json!([]), 1),
+                page_with_fields(
+                    &[ROSTER_PERSON, ROSTER_ORDER, ROSTER_INCLUDED],
+                    json!([]),
+                    1,
+                ),
+                page_with_fields(
+                    &adjustment_fields,
+                    json!([[null, null, null, "training", null, {"id":"ou_A"}, "2026-10-20", "2026-10-21"]]),
+                    1,
+                ),
+                page_with_fields(&[CALENDAR_DATE, CALENDAR_KIND, CALENDAR_NOTE], json!([]), 1),
+                page_with_fields(&rule_fields, json!([]), 1),
+            ]),
+            args: Mutex::new(vec![]),
+        };
+        let payload = load(&mock).unwrap();
+        assert_eq!(payload.exceptions, payload.leave);
+        assert_eq!(payload.leave[0]["person"]["id"], "ou_A");
+        assert_eq!(payload.leave[0]["startDate"], "2026-10-20");
+        let args = mock.args.lock().unwrap();
+        assert_eq!(args.len(), 5);
+        assert_eq!(
+            args.iter()
+                .filter(|call| call
+                    .windows(2)
+                    .any(|pair| pair == ["--table-id", TABLE_ADJUSTMENTS]))
+                .count(),
+            1
+        );
     }
 }

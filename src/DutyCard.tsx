@@ -231,20 +231,11 @@ export function DutyCard({
             <button
               onClick={() =>
                 void api
-                  .openDuty(false, "exceptions")
+                  .openDuty(false, "adjustments")
                   .catch((e) => setError(errorMessage(e).message))
               }
             >
-              调班与休息 <ArrowUpRight size={11} />
-            </button>
-            <button
-              onClick={() =>
-                void api
-                  .openDuty(false, "leave")
-                  .catch((e) => setError(errorMessage(e).message))
-              }
-            >
-              登记请假 <ArrowUpRight size={11} />
+              请假与临时调整 <ArrowUpRight size={11} />
             </button>
             <button
               onClick={() =>
@@ -257,7 +248,7 @@ export function DutyCard({
             </button>
           </div>
           <p>
-            代班：填日期、类型“换人”和替班人员。互换：只需一条记录，填两个日期、类型“互换”，不填替班人员。请假起止日期均包含当天。
+            请假：填写请假人员和起止日期，轮值会自动顺延；临时调整：填写调整日期和类型。指定代班时选代班人员，互换时填写对调日期。请假起止日期均包含当天。
           </p>
           <table aria-label="值日排班预览">
             <thead>
