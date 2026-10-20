@@ -15,6 +15,8 @@ pub struct DutyPayload {
     pub rules: Vec<Value>,
     pub exceptions: Vec<Value>,
     #[serde(default)]
+    pub weekly: Vec<Value>,
+    #[serde(default)]
     pub calendar: Vec<Value>,
     #[serde(default)]
     pub leave: Vec<Value>,
@@ -101,54 +103,52 @@ fn table(cli: &dyn Cli, id: &str, fields: &[(&str, &str)]) -> Result<(Vec<Value>
         "值日表超过读取范围，保留上次完整缓存。",
     ))
 }
-const RULE_FIELDS: &[(&str, &str)] = &[
-    (RULE_START_DATE, "startDate"),
-    (RULE_DAILY_COUNT, "dailyCount"),
-    (RULE_WEEK_ANCHOR, "singleWeekAnchor"),
-    (RULE_ENABLED, "enabled"),
-    (RULE_LEAVE_POLICY, "leavePolicy"),
+const SCHEDULE_FIELDS: &[(&str, &str)] = &[
+    (SCHEDULE_DATE, "date"),
+    (SCHEDULE_KIND, "kind"),
+    (SCHEDULE_PEOPLE, "people"),
+    (SCHEDULE_NOTE, "note"),
 ];
-const ADJUSTMENT_FIELDS: &[(&str, &str)] = &[
-    (ADJUSTMENT_DATE, "date"),
-    (ADJUSTMENT_KIND, "kind"),
-    (ADJUSTMENT_PEOPLE, "people"),
-    (ADJUSTMENT_NOTE, "note"),
-    (ADJUSTMENT_SWAP_DATE, "swapDate"),
-    (LEAVE_PERSON, "person"),
-    (LEAVE_START_DATE, "startDate"),
-    (LEAVE_END_DATE, "endDate"),
+const WEEK_FIELDS: &[(&str, &str)] = &[
+    (SCHEDULE_WEEK_START, "weekStart"),
+    (SCHEDULE_REST_DAYS, "restDays"),
 ];
 pub fn load(cli: &dyn Cli) -> Result<DutyPayload> {
-    let (rules, before) = table(cli, TABLE_RULES, RULE_FIELDS)?;
-    let (roster, _) = table(
-        cli,
-        TABLE_ROSTER,
-        &[
-            (ROSTER_PERSON, "person"),
-            (ROSTER_ORDER, "order"),
-            (ROSTER_INCLUDED, "included"),
-        ],
-    )?;
-    let (adjustments, _) = table(cli, TABLE_ADJUSTMENTS, ADJUSTMENT_FIELDS)?;
-    let (calendar, _) = table(
-        cli,
-        TABLE_CALENDAR,
-        &[
-            (CALENDAR_DATE, "date"),
-            (CALENDAR_KIND, "kind"),
-            (CALENDAR_NOTE, "note"),
-        ],
-    )?;
-    let (_, after) = table(cli, TABLE_RULES, RULE_FIELDS)?;
-    if before != after {
-        return Err(AppError::new("conflict", "值日规则正在修改，请稍后刷新。"));
-    }
+    let mut week_fields = WEEK_FIELDS.to_vec();
+    const DAY_KEYS: [&str; 7] = [
+        "monPeople",
+        "tuePeople",
+        "wedPeople",
+        "thuPeople",
+        "friPeople",
+        "satPeople",
+        "sunPeople",
+    ];
+    week_fields.extend(
+        SCHEDULE_WEEK_PEOPLE
+            .iter()
+            .zip(DAY_KEYS)
+            .map(|(id, key)| (*id, key)),
+    );
+    let mut all_fields = SCHEDULE_FIELDS.to_vec();
+    all_fields.extend(week_fields);
+    let (rows, _) = table(cli, TABLE_SCHEDULE, &all_fields)?;
+    let schedule = rows
+        .iter()
+        .filter(|row| !row["date"].is_null())
+        .cloned()
+        .collect();
+    let weekly = rows
+        .into_iter()
+        .filter(|row| !row["weekStart"].is_null())
+        .collect();
     Ok(DutyPayload {
-        roster,
-        rules,
-        exceptions: adjustments.clone(),
-        calendar,
-        leave: adjustments,
+        roster: vec![],
+        rules: vec![],
+        exceptions: schedule,
+        weekly,
+        calendar: vec![],
+        leave: vec![],
     })
 }
 
@@ -211,39 +211,53 @@ mod tests {
         }
     }
     #[test]
-    fn loads_leave_and_schedule_changes_from_one_adjustment_table() {
-        let rule_fields: Vec<&str> = RULE_FIELDS.iter().map(|(field, _)| *field).collect();
-        let adjustment_fields: Vec<&str> =
-            ADJUSTMENT_FIELDS.iter().map(|(field, _)| *field).collect();
+    fn loads_manual_schedule_from_one_table() {
+        let mut schedule_fields: Vec<&str> =
+            SCHEDULE_FIELDS.iter().map(|(field, _)| *field).collect();
+        schedule_fields.extend(WEEK_FIELDS.iter().map(|(field, _)| *field));
+        schedule_fields.extend(SCHEDULE_WEEK_PEOPLE);
+        let mut legacy_row = vec![
+            json!("2026-10-20"),
+            json!(["值日"]),
+            Value::Null,
+            json!("plan"),
+            Value::Null,
+            Value::Null,
+        ];
+        legacy_row.extend((0..7).map(|_| Value::Null));
+        let mut weekly_row = vec![
+            Value::Null,
+            Value::Null,
+            Value::Null,
+            json!("weekly note"),
+            json!("2026-10-19"),
+            json!(["周六", "周日"]),
+            Value::Null,
+            json!([{"id":"ou_A", "name":"郑同事"}]),
+        ];
+        weekly_row.extend((0..5).map(|_| Value::Null));
         let mock = Mock {
-            pages: Mutex::new(vec![
-                page_with_fields(&rule_fields, json!([]), 1),
-                page_with_fields(
-                    &[ROSTER_PERSON, ROSTER_ORDER, ROSTER_INCLUDED],
-                    json!([]),
-                    1,
-                ),
-                page_with_fields(
-                    &adjustment_fields,
-                    json!([[null, null, null, "training", null, {"id":"ou_A"}, "2026-10-20", "2026-10-21"]]),
-                    1,
-                ),
-                page_with_fields(&[CALENDAR_DATE, CALENDAR_KIND, CALENDAR_NOTE], json!([]), 1),
-                page_with_fields(&rule_fields, json!([]), 1),
-            ]),
+            pages: Mutex::new(vec![page_with_fields(
+                &schedule_fields,
+                json!([legacy_row, weekly_row]),
+                1,
+            )]),
             args: Mutex::new(vec![]),
         };
         let payload = load(&mock).unwrap();
-        assert_eq!(payload.exceptions, payload.leave);
-        assert_eq!(payload.leave[0]["person"]["id"], "ou_A");
-        assert_eq!(payload.leave[0]["startDate"], "2026-10-20");
+        assert_eq!(payload.exceptions[0]["date"], "2026-10-20");
+        assert_eq!(payload.exceptions[0]["kind"][0], "值日");
+        assert_eq!(payload.weekly.len(), 1);
+        assert_eq!(payload.weekly[0]["weekStart"], "2026-10-19");
+        assert_eq!(payload.weekly[0]["tuePeople"][0]["id"], "ou_A");
+        assert!(payload.leave.is_empty());
         let args = mock.args.lock().unwrap();
-        assert_eq!(args.len(), 5);
+        assert_eq!(args.len(), 1);
         assert_eq!(
             args.iter()
                 .filter(|call| call
                     .windows(2)
-                    .any(|pair| pair == ["--table-id", TABLE_ADJUSTMENTS]))
+                    .any(|pair| pair == ["--table-id", TABLE_SCHEDULE]))
                 .count(),
             1
         );

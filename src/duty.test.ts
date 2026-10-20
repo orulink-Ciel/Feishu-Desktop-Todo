@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { dayNumber, defaultWorkday, dutyForDate } from "./duty";
+import {
+  dayNumber,
+  defaultWorkday,
+  dutyForDate,
+  manualDutyForDate,
+} from "./duty";
 import type { DutyPayload } from "./types";
 const person = (id: string, name = id) => ({ id: "ou_" + id, name });
 const config = (): DutyPayload => ({
@@ -81,6 +86,40 @@ describe("company duty rotation", () => {
     expect(names(p, "2026-10-12")).toEqual(["C"]);
     p.rules[0].dailyCount = 3;
     expect(dutyForDate(p, "2026-10-10").state).toBe("needsReplacement");
+  });
+  it("defers a business-travel absence across workdays and restores the turn after return", () => {
+    const p = config();
+    p.rules[0].leavePolicy = "顺延补值";
+    p.leave = [
+      { person: [person("A")], startDate: "2026-10-10", endDate: "2026-10-12" },
+    ];
+    expect(names(p, "2026-10-10")).toEqual(["B"]);
+    expect(names(p, "2026-10-12")).toEqual(["C"]);
+    expect(names(p, "2026-10-13")).toEqual(["A"]);
+    expect(names(p, "2026-10-14")).toEqual(["B"]);
+  });
+  it("uses only manual date assignments and ignores legacy travel records", () => {
+    const p = config();
+    p.rules[0].enabled = false;
+    p.exceptions = [
+      {
+        date: "2026-10-20",
+        kind: "值日",
+        people: [person("B")],
+      },
+      {
+        date: null,
+        kind: "出差",
+        people: [person("B")],
+        startDate: "2026-10-20",
+        endDate: "2026-10-22",
+      },
+    ];
+    expect(manualDutyForDate(p, "2026-10-20").state).toBe("ready");
+    expect(manualDutyForDate(p, "2026-10-20").people).toEqual([person("B")]);
+    expect(manualDutyForDate(p, "2026-10-21").state).toBe("unplanned");
+    p.exceptions[0].people = [person("A")];
+    expect(manualDutyForDate(p, "2026-10-20").people).toEqual([person("A")]);
   });
   it("ignores saved leave for a member who is no longer participating", () => {
     const p = config();
@@ -194,6 +233,29 @@ describe("company duty rotation", () => {
     p.roster[2].order = 1;
     expect(names(p, "2026-10-10")).toEqual(["C"]);
   });
+  it("adds a new colleague from an effective date without changing earlier assignments", () => {
+    const original = config();
+    const expanded = config();
+    expanded.roster.push({
+      person: [person("D")],
+      order: 4,
+      included: true,
+      startDate: "2026-10-15",
+      endDate: null,
+    });
+    for (const date of ["2026-10-10", "2026-10-12", "2026-10-13", "2026-10-14"])
+      expect(names(expanded, date)).toEqual(names(original, date));
+    expect(names(expanded, "2026-10-15")).toEqual(["B"]);
+    expect(names(expanded, "2026-10-20")).toEqual(["D"]);
+  });
+  it("keeps a departing colleague in past rotation and removes them after their end date", () => {
+    const p = config();
+    p.roster[2].endDate = "2026-10-13";
+    expect(names(p, "2026-10-10")).toEqual(["A"]);
+    expect(names(p, "2026-10-12")).toEqual(["B"]);
+    expect(names(p, "2026-10-13")).toEqual(["C"]);
+    expect(names(p, "2026-10-14")).toEqual(["A"]);
+  });
   it("keeps same-name people separate by their Feishu identity", () => {
     const p = config();
     p.roster[0].person = [person("A", "同名")];
@@ -249,5 +311,41 @@ describe("company duty rotation", () => {
       change(p);
       expect(dutyForDate(p, "2026-10-12").state).toBe("invalid");
     }
+  });
+  it("expands one weekly row into daily assignments and distinguishes rest from missing entries", () => {
+    const p = config();
+    p.weekly = [
+      {
+        weekStart: "2026-10-19T00:00:00.000+08:00",
+        restDays: ["周六", "周日"],
+        tuePeople: [person("A", "郑同事")],
+      },
+    ];
+    expect(manualDutyForDate(p, "2026-10-20")).toMatchObject({
+      state: "ready",
+      people: [{ id: "ou_A", name: "郑同事" }],
+    });
+    expect(manualDutyForDate(p, "2026-10-21")).toMatchObject({
+      state: "unplanned",
+      message: "待填写值日人员",
+    });
+    expect(manualDutyForDate(p, "2026-10-24").state).toBe("rest");
+    expect(manualDutyForDate(p, "2026-10-25").state).toBe("rest");
+  });
+  it("requires a Monday week anchor and lets a weekly row supersede migrated daily entries", () => {
+    const p = config();
+    p.weekly = [
+      {
+        weekStart: "2026-10-19",
+        restDays: [],
+        tuePeople: [person("A", "新排班")],
+      },
+    ];
+    p.exceptions = [
+      { date: "2026-10-20", kind: "值日", people: [person("B", "旧排班")] },
+    ];
+    expect(manualDutyForDate(p, "2026-10-20").people[0].name).toBe("新排班");
+    p.weekly[0].weekStart = "2026-10-20";
+    expect(manualDutyForDate(p, "2026-10-20").state).toBe("invalid");
   });
 });

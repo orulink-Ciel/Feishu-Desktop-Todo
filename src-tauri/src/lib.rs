@@ -1,4 +1,5 @@
 mod core;
+#[allow(dead_code)]
 mod duty;
 use core::{
     client_task_url, AppError, LoginLink, NativeCli, Preferences, Service, Snapshot, Store,
@@ -67,8 +68,7 @@ async fn open_duty_url(document: bool, table: Option<String>) -> Result<(), AppE
     } else {
         let id = match table.as_deref() {
             None => None,
-            Some("adjustments" | "exceptions" | "leave") => Some(duty::TABLE_ADJUSTMENTS),
-            Some("calendar") => Some(duty::TABLE_CALENDAR),
+            Some("schedule") => Some(duty::TABLE_SCHEDULE),
             _ => return Err(AppError::new("open", "值日入口无效。")),
         };
         id.map_or_else(

@@ -9,6 +9,7 @@ fn duty_cache_is_account_scoped_and_cleared_after_permission_denial() {
         roster: vec![json!({"person":"old user"})],
         rules: vec![],
         exceptions: vec![],
+        weekly: vec![],
         calendar: vec![],
         leave: vec![],
     };
@@ -30,6 +31,7 @@ fn failed_duty_read_keeps_full_cache_and_does_not_change_tasks() {
         roster: vec![],
         rules: vec![json!({"enabled":false})],
         exceptions: vec![],
+        weekly: vec![],
         calendar: vec![],
         leave: vec![],
     };
@@ -54,6 +56,7 @@ fn unconfigured_duty_source_does_not_call_cli_or_expose_previous_cache() {
                 roster: vec![json!({"person":"old company"})],
                 rules: vec![],
                 exceptions: vec![],
+                weekly: vec![],
                 calendar: vec![],
                 leave: vec![],
             },

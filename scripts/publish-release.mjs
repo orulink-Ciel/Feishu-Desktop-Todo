@@ -12,7 +12,7 @@ const api = path => JSON.parse(execFileSync('gh', ['api', `repos/${repo}/${path}
 // The get-by-tag endpoint omits drafts. Authenticated release listing includes them.
 const findRelease = tagName => api('releases?per_page=100').find(r => r.tag_name === tagName);
 const version = JSON.parse(readFileSync('package.json', 'utf8')).version;
-const notes = '请假和临时调班已合并到一个值日调整表；请假时系统自动顺延值日，休假期间由后续人员轮值，返岗后优先补值。桌面端提供统一调整入口。';
+const notes = '值日管理改为每周一条记录的手工排班；日期和星期由表格自动生成，桌面端同步展示每日安排。遇到请假、出差或调班时，管理员直接修改当周对应日期。';
 const manifest = createManifest(dir, tag, notes);
 if (manifest.version !== version) throw new Error('Tag does not match source version.');
 // Never let an older completed workflow roll a newer update feed back.
@@ -35,7 +35,7 @@ if (!release) {
   // ID instead of immediately depending on that eventually consistent list.
   release = JSON.parse(execFileSync('gh', ['api', `repos/${repo}/releases`, '--method', 'POST', '--input', '-'], {
     encoding: 'utf8',
-    input: JSON.stringify({ tag_name: tag, target_commitish: commit, name: `轻列便签 ${tag}：值日调整与请假顺延`, body: readFileSync(notesFile, 'utf8'), draft: true, prerelease: true, make_latest: 'false' }),
+    input: JSON.stringify({ tag_name: tag, target_commitish: commit, name: `轻列便签 ${tag}：手工周排班`, body: readFileSync(notesFile, 'utf8'), draft: true, prerelease: true, make_latest: 'false' }),
   }));
 }
 if (!release) throw new Error('Unable to read back the created draft release.');
